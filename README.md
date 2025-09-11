@@ -1,4 +1,4 @@
-# Outfitter-dev Tap
+# Outfitter.dev Tap
 
 ## How do I install these formulae?
 
