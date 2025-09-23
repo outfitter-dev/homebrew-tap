@@ -20,6 +20,13 @@ class Blz < Formula
     end
   end
 
+  on_linux do
+    on_intel do
+      url "https://github.com/outfitter-dev/blz/releases/download/v#{version}/blz-#{version}-linux-x64.tar.gz"
+      sha256 "7ae0e29733357a04eea4135ed6ddc7a13361789a0b5d015e141ab8e5ac998314"
+    end
+  end
+
   def install
     bin.install "blz"
   end
