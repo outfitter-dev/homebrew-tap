@@ -9,6 +9,12 @@ class Blz < Formula
     strategy :github_latest
   end
 
+  bottle do
+    root_url "https://github.com/outfitter-dev/homebrew-tap/releases/download/blz-1.5.5"
+    sha256 cellar: :any_skip_relocation, arm64_sequoia: "f1200ab4e81a375bfd9e65f6138445c1a016409bdfeea43be76bb064c89af8c2"
+    sha256 cellar: :any_skip_relocation, x86_64_linux:  "b110146b5514aa328001044b09b7ff7fba9fcf6203c7ccfad8c6362068ba3967"
+  end
+
   on_macos do
     on_arm do
       url "https://github.com/outfitter-dev/blz/releases/download/v#{version}/blz-#{version}-darwin-arm64.tar.gz"
