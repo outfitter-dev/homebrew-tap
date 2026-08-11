@@ -7,7 +7,8 @@ on:
         description: Pull request number
         required: true
       head_sha:
-        description: Expected pull request head commit SHA (optional)
+        description: Expected pull request head commit SHA
+        required: true
 
 permissions: {}
 
@@ -41,13 +42,7 @@ jobs:
           HOMEBREW_GIT_COMMITTER_EMAIL: ${{ steps.git_setup.outputs.email }}
           HOMEBREW_GIT_COMMITTER_NAME: ${{ steps.git_setup.outputs.name }}
           PULL_REQUEST: ${{ inputs.pull_request }}
-        run: |
-          if [[ -n "$HEAD_SHA" ]]
-          then
-            brew pr-pull --debug --tap="$GITHUB_REPOSITORY" --head-sha="$HEAD_SHA" "$PULL_REQUEST"
-          else
-            brew pr-pull --debug --tap="$GITHUB_REPOSITORY" "$PULL_REQUEST"
-          fi
+        run: brew pr-pull --debug --tap="$GITHUB_REPOSITORY" --head-sha="$HEAD_SHA" "$PULL_REQUEST"
 
       - name: Push commits
         uses: Homebrew/actions/git-try-push@fd832223f9f99ebf0244dd20658680e5d4aca049 # 2026.08.03.2
