@@ -1,18 +1,36 @@
-# Outfitter.dev Tap
+# Outfitter Homebrew Tap
 
-## How do I install these formulae?
+This tap distributes [Blaze](https://github.com/outfitter-dev/blz) as the [`blz`](Formula/blz.rb) formula.
 
-`brew install outfitter-dev/tap/<formula>`
+## Install
 
-Or `brew tap outfitter-dev/tap` and then `brew install <formula>`.
+```sh
+brew install outfitter-dev/tap/blz
+```
 
-Or, in a `brew bundle` `Brewfile`:
+To add the tap separately:
+
+```sh
+brew tap outfitter-dev/tap
+brew install blz
+```
+
+In a `Brewfile`:
 
 ```ruby
 tap "outfitter-dev/tap"
-brew "<formula>"
+brew "blz"
 ```
 
-## Documentation
+## Publish A Formula Update
 
-`brew help`, `man brew` or check [Homebrew's documentation](https://docs.brew.sh).
+The `blz` release workflow opens a formula pull request in this repository. The [`brew test-bot`](.github/workflows/tests.yml) workflow audits the formula, tests installation, and uploads bottles for macOS and Linux.
+
+After every `brew test-bot` job passes, run the [`brew pr-pull`](.github/workflows/publish.yml) workflow from GitHub Actions with both of these inputs:
+
+- `pull_request`: the formula pull request number.
+- `head_sha`: the pull request's tested head commit SHA.
+
+The head SHA guard prevents publishing if the pull request changed after its successful test run. `brew pr-pull` downloads the bottle artifacts, updates the formula, uploads the bottles to a GitHub release, and pushes the resulting commit to `main`.
+
+See [Homebrew's documentation](https://docs.brew.sh) for general Homebrew usage.
