@@ -1,6 +1,6 @@
 # Outfitter Homebrew Tap
 
-This tap distributes [Blaze](https://github.com/outfitter-dev/blz) as the [`blz`](Formula/blz.rb) formula.
+This tap distributes Outfitter command-line tools as Homebrew formulae.
 
 ## Install
 
@@ -34,3 +34,15 @@ After every `brew test-bot` job passes, run the [`brew pr-pull`](.github/workflo
 The head SHA guard prevents publishing if the pull request changed after its successful test run. `brew pr-pull` downloads the bottle artifacts, updates the formula, uploads the bottles to a GitHub release, and pushes the resulting commit to `main`.
 
 See [Homebrew's documentation](https://docs.brew.sh) for general Homebrew usage.
+
+## Skillset
+
+Skillset is available as a native CLI for Apple Silicon and Intel macOS.
+
+```sh
+brew install outfitter-dev/tap/skillset
+```
+
+Upgrade or uninstall it with `brew upgrade skillset` or `brew uninstall skillset`.
+
+Formula updates arrive through a tested pull request and are merged only after tap CI passes.
