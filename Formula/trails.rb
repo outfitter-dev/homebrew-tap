@@ -3,6 +3,13 @@ class Trails < Formula
   homepage "https://github.com/outfitter-dev/trails"
   license "MIT"
 
+  bottle do
+    root_url "https://github.com/outfitter-dev/homebrew-tap/releases/download/trails-1.0.0-beta.50"
+    sha256 cellar: :any,                 arm64_tahoe:  "1941f1d8817b5a66b9d0dc82cbe248871e1c3ca8f4855d9dc6d9ae73a4f0c963"
+    sha256 cellar: :any_skip_relocation, arm64_linux:  "1c53832e438342e6c46acbc46478177f43fb64e0c648f8f1900ba72c43fed65d"
+    sha256 cellar: :any_skip_relocation, x86_64_linux: "8f4323b0511f3ad0c0143c91b38501a92cf096df624b887a8842c61aff8c9ec9"
+  end
+
   depends_on "bun"
 
   on_macos do
