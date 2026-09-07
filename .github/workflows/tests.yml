@@ -82,7 +82,6 @@ jobs:
           test "$(lipo -archs "$bin/shellcheck")" = "x86_64"
           "$bin/shellcheck" --version
           test "$("$bin/shellcheck" --version | awk '$1 == "version:" {print $2}')" = "$version"
-          echo "$bin" >> "$GITHUB_PATH"
 
           # Keep actionlint matched too: its Homebrew formula depends on ShellCheck.
           version="1.7.12"
@@ -101,6 +100,23 @@ jobs:
           test "$(lipo -archs "$bin/actionlint")" = "x86_64"
           "$bin/actionlint" -version
           test "$("$bin/actionlint" -version | head -n 1)" = "$version"
+
+          # test-bot rebuilds child PATH after brew filters it; only the Homebrew
+          # prefix and system directories survive. Replace links on this CI host.
+          prefix="$(brew --prefix)"
+          for tool in shellcheck actionlint; do
+            target="$prefix/bin/$tool"
+            if [[ -e "$target" || -L "$target" ]]; then
+              ls -ld "$target"
+            fi
+            test ! -d "$target"
+            ln -sfn "$bin/$tool" "$target"
+          done
+          export PATH="$prefix/bin:$prefix/sbin:/usr/bin:/bin:/usr/sbin:/sbin"
+          test "$(command -v shellcheck)" = "$prefix/bin/shellcheck"
+          test "$(command -v actionlint)" = "$prefix/bin/actionlint"
+          shellcheck --version
+          actionlint -version
 
       - run: brew test-bot --only-tap-syntax
 
