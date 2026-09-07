@@ -57,23 +57,52 @@ jobs:
 
       - run: brew test-bot --only-setup
 
-      - name: Diagnose Intel style process tree
-        id: style-probe
+      - name: Provision style tools on Intel
         if: matrix.os == 'macos-15-intel'
-        continue-on-error: true
         timeout-minutes: 6
-        run: python3 scripts/intel-style-probe.py "$RUNNER_TEMP/intel-style-probe"
+        run: |
+          # Keep the version and official archive checksum together. Homebrew only
+          # accepts a system ShellCheck matching its formula; drift must fail here.
+          version="0.11.0"
+          sha256="c2c15e08df0e8fbc374c335b230a7ee958c313fa5714817a59aa59f1aa594f51"
+          formula_version="$(brew info --json=v2 shellcheck | jq -r '.formulae[0].versions.stable')"
+          if [[ "$formula_version" != "$version" ]]; then
+            echo "Update the Intel ShellCheck version and checksum to match Homebrew $formula_version" >&2
+            exit 1
+          fi
+          tools="$RUNNER_TEMP/skillset-shellcheck"
+          mkdir -p "$tools"
+          archive="$tools/shellcheck.tar.gz"
+          curl --fail --location --max-time 120 \
+            "https://github.com/koalaman/shellcheck/releases/download/v$version/shellcheck-v$version.darwin.x86_64.tar.gz" \
+            --output "$archive"
+          printf '%s  %s\n' "$sha256" "$archive" | shasum --algorithm 256 --check
+          tar -xzf "$archive" -C "$tools"
+          bin="$tools/shellcheck-v$version"
+          test "$(lipo -archs "$bin/shellcheck")" = "x86_64"
+          "$bin/shellcheck" --version
+          test "$("$bin/shellcheck" --version | awk '$1 == "version:" {print $2}')" = "$version"
+          echo "$bin" >> "$GITHUB_PATH"
 
-      - name: Preserve Intel style diagnostics
-        if: always() && matrix.os == 'macos-15-intel'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: intel-style-diagnostics
-          path: ${{ runner.temp }}/intel-style-probe
-          if-no-files-found: error
+          # Keep actionlint matched too: its Homebrew formula depends on ShellCheck.
+          version="1.7.12"
+          sha256="5b44c3bc2255115c9b69e30efc0fecdf498fdb63c5d58e17084fd5f16324c644"
+          formula_version="$(brew info --json=v2 actionlint | jq -r '.formulae[0].versions.stable')"
+          if [[ "$formula_version" != "$version" ]]; then
+            echo "Update the Intel actionlint version and checksum to match Homebrew $formula_version" >&2
+            exit 1
+          fi
+          archive="$tools/actionlint.tar.gz"
+          curl --fail --location --max-time 120 \
+            "https://github.com/rhysd/actionlint/releases/download/v$version/actionlint_${version}_darwin_amd64.tar.gz" \
+            --output "$archive"
+          printf '%s  %s\n' "$sha256" "$archive" | shasum --algorithm 256 --check
+          tar -xzf "$archive" -C "$bin" actionlint
+          test "$(lipo -archs "$bin/actionlint")" = "x86_64"
+          "$bin/actionlint" -version
+          test "$("$bin/actionlint" -version | head -n 1)" = "$version"
 
       - run: brew test-bot --only-tap-syntax
-        if: ${{ !cancelled() }}
 
       - run: brew test-bot --only-formulae
         if: github.event_name == 'pull_request'
