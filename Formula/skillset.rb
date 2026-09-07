@@ -1,15 +1,15 @@
 class Skillset < Formula
   desc "Source-first compiler for provider-native agent loadouts"
   homepage "https://github.com/outfitter-dev/skillset"
-  url "https://github.com/outfitter-dev/skillset/releases/download/v0.24.0/skillset-v0.24.0-darwin-arm64.tar.gz"
-  sha256 "cc4968136780ca77f4a9598d03d15e1f9dbffd67f0a7d87b6af2059f21160f6b"
+  url "https://github.com/outfitter-dev/skillset/releases/download/v0.25.0/skillset-v0.25.0-darwin-arm64.tar.gz"
+  sha256 "d6d9d8a68b5fffa666335d8df793a7bc0c612421892d346cf9e397b1418e3d0b"
   license "MIT"
   depends_on :macos
 
   on_macos do
     on_intel do
-      url "https://github.com/outfitter-dev/skillset/releases/download/v0.24.0/skillset-v0.24.0-darwin-x64.tar.gz"
-      sha256 "1ec9500895b8c5c04f9122e431a3793fedb6ebd18f906d44bb29575744609c76"
+      url "https://github.com/outfitter-dev/skillset/releases/download/v0.25.0/skillset-v0.25.0-darwin-x64.tar.gz"
+      sha256 "49ea21e462eeec25f3bc8679a2e466eb3fb3dd309d51e310b67758a9d245ddc7"
     end
   end
 
