@@ -4,6 +4,12 @@ class Skillset < Formula
   url "https://github.com/outfitter-dev/skillset/releases/download/v0.26.1/skillset-v0.26.1-darwin-arm64.tar.gz"
   sha256 "6a4540121c16486b8f52e2fb3809077e7292915f52e6a8172e4449d10de70251"
   license "MIT"
+
+  bottle do
+    root_url "https://github.com/outfitter-dev/homebrew-tap/releases/download/skillset-0.26.1"
+    sha256                               arm64_tahoe: "69b06dd01cc5ce8f519a51fe1fe8bc8aa6c31417049ec5f19a7de81ac1a9026c"
+    sha256 cellar: :any_skip_relocation, sequoia:     "afa632c88467fa7181e8794770cfd5d293122f9ca952ba1df7971224a7af3b6f"
+  end
   depends_on :macos
 
   on_macos do
