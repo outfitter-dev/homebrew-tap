@@ -9,6 +9,11 @@ on:
       head_sha:
         description: Expected pull request head commit SHA
         required: true
+      merged_pr_recovery:
+        description: Recover bottles after the reviewed PR was already merged
+        required: false
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -37,12 +42,43 @@ jobs:
 
       - name: Pull bottles
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HEAD_SHA: ${{ inputs.head_sha }}
           HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_GIT_COMMITTER_EMAIL: ${{ steps.git_setup.outputs.email }}
           HOMEBREW_GIT_COMMITTER_NAME: ${{ steps.git_setup.outputs.name }}
+          MERGED_PR_RECOVERY: ${{ inputs.merged_pr_recovery }}
           PULL_REQUEST: ${{ inputs.pull_request }}
-        run: brew pr-pull --debug --tap="$GITHUB_REPOSITORY" --head-sha="$HEAD_SHA" "$PULL_REQUEST"
+        run: |
+          args=(--debug "--tap=$GITHUB_REPOSITORY" "--head-sha=$HEAD_SHA")
+          if [[ "$MERGED_PR_RECOVERY" != "true" ]]; then
+            brew pr-pull "${args[@]}" "$PULL_REQUEST"
+            exit 0
+          fi
+
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+
+          pr_json="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PULL_REQUEST")"
+          actual_head="$(jq -r .head.sha <<<"$pr_json")"
+          base_ref="$(jq -r .base.ref <<<"$pr_json")"
+          base_sha="$(jq -r .base.sha <<<"$pr_json")"
+          merge_sha="$(jq -r .merge_commit_sha <<<"$pr_json")"
+          merged="$(jq -r .merged <<<"$pr_json")"
+
+          test "$merged" = "true"
+          test "$base_ref" = "main"
+          test "$actual_head" = "$HEAD_SHA"
+          read -r commit parent_one parent_two extra < <(git rev-list --parents -n 1 "$merge_sha")
+          test "$commit" = "$merge_sha"
+          test "$parent_one" = "$base_sha"
+          test "$parent_two" = "$HEAD_SHA"
+          test -z "${extra:-}"
+          git merge-base --is-ancestor "$merge_sha" origin/main
+          git diff --quiet "$HEAD_SHA" HEAD -- Formula/
+
+          GITHUB_SHA="$base_sha" brew pr-pull \
+            "${args[@]}" --no-cherry-pick --clean "$PULL_REQUEST"
 
       - name: Push commits
         uses: Homebrew/actions/git-try-push@fd832223f9f99ebf0244dd20658680e5d4aca049 # 2026.08.03.2
