@@ -69,6 +69,13 @@ jobs:
           test "$merged" = "true"
           test "$base_ref" = "main"
           test "$actual_head" = "$HEAD_SHA"
+          git fetch --no-tags origin \
+            "refs/heads/$base_ref:refs/remotes/origin/$base_ref" \
+            "refs/pull/$PULL_REQUEST/head"
+          git cat-file -e "$base_sha^{commit}"
+          git cat-file -e "$HEAD_SHA^{commit}"
+          git cat-file -e "$merge_sha^{commit}"
+          test "$(git rev-parse "refs/remotes/origin/$base_ref")" = "$GITHUB_SHA"
           read -r commit parent_one parent_two extra < <(git rev-list --parents -n 1 "$merge_sha")
           test "$commit" = "$merge_sha"
           test "$parent_one" = "$base_sha"
