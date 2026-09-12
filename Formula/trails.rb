@@ -5,6 +5,13 @@ class Trails < Formula
   # Keep this scheme after the reset from 1.0.0-beta to 0.2.0.
   version_scheme 1
 
+  bottle do
+    root_url "https://github.com/outfitter-dev/homebrew-tap/releases/download/trails-0.2.1"
+    sha256 cellar: :any,                 arm64_tahoe:  "59a45b42e5c4f50be089bae3cbc1b13606a82739dbc1328e7078dd6614b7eb0a"
+    sha256 cellar: :any_skip_relocation, arm64_linux:  "93049699af8121c3bed0c81c55dc4afa1b0579a71500e040928f5352dac6b50e"
+    sha256 cellar: :any_skip_relocation, x86_64_linux: "44d9a824dbd2bedfda5f18258f750417244cf5973a75b33e3346ac223bc99957"
+  end
+
   depends_on "bun"
 
   on_macos do
