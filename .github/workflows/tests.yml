@@ -17,6 +17,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  publish-runtime:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Set up Homebrew on the publication runner
+        uses: Homebrew/actions/setup-homebrew@1e34f2e2acaa766b7efacb8c26352e6abbb023f9 # 2026.09.13.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify Homebrew 7 publication support
+        run: |
+          version="$(brew --version | head -n 1)"
+          major="${version#Homebrew }"
+          major="${major%%.*}"
+          test "$major" -ge 7
+
+          help="$(brew pr-pull --help)"
+          grep -q -- '--head-sha' <<<"$help"
+          grep -q -- '--retain-bottle-dir' <<<"$help"
+          grep -q -- '--no-cherry-pick' <<<"$help"
+          grep -q -- '--clean' <<<"$help"
+
   test-bot:
     strategy:
       fail-fast: false
@@ -42,7 +65,7 @@ jobs:
     steps:
       - name: Set up Homebrew
         id: set-up-homebrew
-        uses: Homebrew/actions/setup-homebrew@fd832223f9f99ebf0244dd20658680e5d4aca049 # 2026.08.03.2
+        uses: Homebrew/actions/setup-homebrew@1e34f2e2acaa766b7efacb8c26352e6abbb023f9 # 2026.09.13.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 

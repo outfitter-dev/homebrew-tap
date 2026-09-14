@@ -1,0 +1,47 @@
+name: formula landing policy
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash -xeuo pipefail {0}
+
+jobs:
+  formula-landing-policy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Keep formula pull requests in draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IS_DRAFT: ${{ github.event.pull_request.draft }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+        run: |
+          formula_files="$(gh api --paginate \
+            "repos/$GITHUB_REPOSITORY/pulls/$PULL_REQUEST/files?per_page=100" \
+            --jq '.[] |
+              select(
+                (.filename | startswith("Formula/")) or
+                ((.previous_filename // "") | startswith("Formula/"))
+              ) |
+              if .previous_filename then
+                "\(.previous_filename) -> \(.filename)"
+              else
+                .filename
+              end')"
+
+          if [[ -z "$formula_files" ]]; then
+            exit 0
+          fi
+
+          if [[ "$IS_DRAFT" != "true" ]]; then
+            echo "::error title=Formula landing belongs to brew pr-pull::Keep formula PR #$PULL_REQUEST in draft. After its required checks pass, dispatch brew pr-pull from main with the exact tested head SHA."
+            printf '%s\n' "$formula_files"
+            exit 1
+          fi
