@@ -59,6 +59,7 @@ jobs:
           pr_json="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PULL_REQUEST")"
           actual_head="$(jq -r .head.sha <<<"$pr_json")"
           base_ref="$(jq -r .base.ref <<<"$pr_json")"
+          draft="$(jq -r .draft <<<"$pr_json")"
           state="$(jq -r .state <<<"$pr_json")"
           merged="$(jq -r .merged <<<"$pr_json")"
 
@@ -70,12 +71,38 @@ jobs:
           if [[ "$MERGED_PR_RECOVERY" = "true" ]]; then
             test "$merged" = "true" || \
               fail "Invalid recovery request" "merged_pr_recovery is only valid for an already-merged formula PR."
-          elif [[ "$state" != "open" || "$merged" != "false" ]]; then
-            if [[ "$merged" = "true" ]]; then
-              fail "Formula PR already merged" "PR #$PULL_REQUEST is already merged. Review the recovery guards, then dispatch from main with merged_pr_recovery=true."
+          else
+            if [[ "$state" != "open" || "$merged" != "false" ]]; then
+              if [[ "$merged" = "true" ]]; then
+                fail "Formula PR already merged" "PR #$PULL_REQUEST is already merged. Review the recovery guards, then dispatch from main with merged_pr_recovery=true."
+              fi
+              fail "Formula PR is not open" "PR #$PULL_REQUEST must remain open for the ordinary brew pr-pull path."
             fi
-            fail "Formula PR is not open" "PR #$PULL_REQUEST must remain open for the ordinary brew pr-pull path."
+            test "$draft" = "true" || \
+              fail "Formula PR is ready to merge" "PR #$PULL_REQUEST must remain a draft so GitHub cannot land it before brew pr-pull."
           fi
+
+          required_checks=(
+            "publish-runtime"
+            "test-bot (macos-26)"
+            "test-bot (macos-15-intel)"
+            "test-bot (ubuntu-latest, ghcr.io/homebrew/brew:main, --privileged)"
+            "test-bot (ubuntu-24.04-arm, ghcr.io/homebrew/brew:main, --privileged)"
+          )
+          if [[ "$MERGED_PR_RECOVERY" != "true" ]]; then
+            required_checks+=("formula-landing-policy")
+          fi
+          check_json="$(gh api --paginate \
+            "repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA/check-runs?filter=latest&per_page=100")"
+          for check in "${required_checks[@]}"; do
+            conclusion="$(jq -s -r --arg check "$check" '
+              [.[].check_runs[] |
+                select(.name == $check and .app.slug == "github-actions")] |
+              max_by(.id) | .conclusion // ""
+            ' <<<"$check_json")"
+            test "$conclusion" = "success" || \
+              fail "Formula PR checks incomplete" "The latest GitHub Actions check '$check' at $HEAD_SHA concluded '$conclusion', not 'success'."
+          done
 
       - name: Set up Homebrew
         uses: Homebrew/actions/setup-homebrew@1e34f2e2acaa766b7efacb8c26352e6abbb023f9 # 2026.09.13.1
@@ -104,6 +131,7 @@ jobs:
           pr_json="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PULL_REQUEST")"
           actual_head="$(jq -r .head.sha <<<"$pr_json")"
           base_ref="$(jq -r .base.ref <<<"$pr_json")"
+          draft="$(jq -r .draft <<<"$pr_json")"
           state="$(jq -r .state <<<"$pr_json")"
           merged="$(jq -r .merged <<<"$pr_json")"
 
@@ -114,6 +142,7 @@ jobs:
           test "$(git rev-parse "refs/remotes/origin/$base_ref")" = "$GITHUB_SHA"
 
           if [[ "$MERGED_PR_RECOVERY" != "true" ]]; then
+            test "$draft" = "true"
             if [[ "$state" != "open" || "$merged" != "false" ]]; then
               if [[ "$merged" = "true" ]]; then
                 echo "::error title=Formula PR already merged::PR #$PULL_REQUEST is already merged. The ordinary brew pr-pull path owns landing. Review the recovery guards, then dispatch from main with merged_pr_recovery=true."
