@@ -31,9 +31,11 @@ Keep the formula pull request open while it is reviewed. **Do not merge it with 
 - `pull_request`: the formula pull request number.
 - `head_sha`: the pull request's tested head commit SHA.
 
-The head SHA guard prevents publishing if the pull request changed after its successful test run. `brew pr-pull` owns the landing operation: it downloads the bottle artifacts, updates the formula, uploads the bottles to a GitHub release, and pushes the resulting commit to `main`. Publication runs are serialized so two formula updates cannot race to push the tap.
+The head SHA guard prevents publishing if the pull request changed after its successful test run. `brew pr-pull` owns the landing operation: it downloads the bottle artifacts, updates the formula, uploads the bottles to a GitHub release, creates build-provenance attestations for the bottles, and pushes the resulting commit to `main`. Publication runs are serialized so two formula updates cannot race to push the tap.
 
 If a formula pull request was already merged manually, stop instead of rerunning the ordinary path or reverting the formula. The workflow's `merged_pr_recovery` input is an emergency path that validates the exact reviewed head, merge topology, current `main`, ancestry, and formula contents before creating the missing bottle commit.
+
+The tap tests its publication setup on bare Ubuntu with Homebrew 7 or newer, in addition to the formula matrix. Intel macOS remains in the matrix while GitHub and Homebrew provide a usable runner; Homebrew 7 classifies Intel macOS as Tier 3, so Intel bottles are best-effort rather than a guaranteed upstream Homebrew platform.
 
 See [Homebrew's documentation](https://docs.brew.sh) for general Homebrew usage.
 
