@@ -32,10 +32,10 @@ jobs:
       actions: read
       attestations: write
       checks: read
-      contents: write
+      contents: read
       id-token: write
       issues: read
-      pull-requests: write
+      pull-requests: read
     steps:
       - name: Validate dispatch before Homebrew setup
         env:
@@ -103,10 +103,20 @@ jobs:
               fail "Formula PR checks incomplete" "The latest GitHub Actions check '$check' at $HEAD_SHA concluded '$conclusion', not 'success'."
           done
 
+      - name: Create publisher token
+        id: publisher_token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.BREW_COMMIT_CLIENT_ID }}
+          private-key: ${{ secrets.HOMEBREW_PUBLISHER_APP_PRIVATE_KEY }}
+          permission-actions: read
+          permission-contents: write
+          permission-pull-requests: write
+
       - name: Set up Homebrew
         uses: Homebrew/actions/setup-homebrew@1e34f2e2acaa766b7efacb8c26352e6abbb023f9 # 2026.09.13.1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.publisher_token.outputs.token }}
 
       - name: Set up git
         id: git_setup
@@ -115,9 +125,9 @@ jobs:
       - name: Pull bottles
         id: pull_bottles
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.publisher_token.outputs.token }}
           HEAD_SHA: ${{ inputs.head_sha }}
-          HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_GITHUB_API_TOKEN: ${{ steps.publisher_token.outputs.token }}
           HOMEBREW_GIT_COMMITTER_EMAIL: ${{ steps.git_setup.outputs.email }}
           HOMEBREW_GIT_COMMITTER_NAME: ${{ steps.git_setup.outputs.name }}
           MERGED_PR_RECOVERY: ${{ inputs.merged_pr_recovery }}

@@ -31,7 +31,9 @@ Keep the formula pull request open and in draft while it is reviewed. **Do not m
 - `pull_request`: the formula pull request number.
 - `head_sha`: the pull request's tested head commit SHA.
 
-The head SHA guard prevents publishing if the pull request changed after its successful test run. The workflow verifies that the exact head remains a draft and that every required check succeeded before Homebrew setup begins. `brew pr-pull` owns the landing operation: it downloads the bottle artifacts, updates the formula, uploads the bottles to a GitHub release, creates build-provenance attestations for the bottles, and pushes the resulting commit to `main`. Publication runs are serialized so two formula updates cannot race to push the tap.
+The head SHA guard prevents publishing if the pull request changed after its successful test run. The workflow verifies that the exact head remains a draft and that every required check succeeded before Homebrew setup begins. It then mints a one-hour installation token for the tap-only Outfitter Homebrew Publisher GitHub App. `brew pr-pull` owns the landing operation: it downloads the bottle artifacts, updates the formula, uploads the bottles to a GitHub release, creates build-provenance attestations for the bottles, and pushes the resulting commit to `main` through the publisher App's ruleset bypass. Publication runs are serialized so two formula updates cannot race to push the tap.
+
+The publisher App is installed only on this repository and receives `actions: read`, `contents: write`, and `pull requests: write`. Its client ID is stored in the Homebrew-standard `BREW_COMMIT_CLIENT_ID` Actions variable and its private key in the `HOMEBREW_PUBLISHER_APP_PRIVATE_KEY` Actions secret. The normal `GITHUB_TOKEN` remains read-only preflight authority and cannot land formula changes.
 
 If a formula pull request was already merged manually, stop instead of rerunning the ordinary path or reverting the formula. The workflow's `merged_pr_recovery` input is an emergency path that validates the exact reviewed head, merge topology, current `main`, ancestry, and formula contents before creating the missing bottle commit.
 
