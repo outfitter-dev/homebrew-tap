@@ -4,13 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       pull_request:
-        description: Pull request number
+        description: Open, reviewed formula pull request to land
         required: true
       head_sha:
-        description: Expected pull request head commit SHA
+        description: Exact head SHA that passed every test-bot job
         required: true
       merged_pr_recovery:
-        description: Recover bottles after the reviewed PR was already merged
+        description: 'Emergency only: recover an already-merged formula PR'
         required: false
         type: boolean
         default: false
@@ -20,6 +20,10 @@ permissions: {}
 defaults:
   run:
     shell: bash -xeuo pipefail {0}
+
+concurrency:
+  group: brew-pr-pull
+  cancel-in-progress: false
 
 jobs:
   pr-pull:
@@ -51,31 +55,42 @@ jobs:
           PULL_REQUEST: ${{ inputs.pull_request }}
         run: |
           args=(--debug "--tap=$GITHUB_REPOSITORY" "--head-sha=$HEAD_SHA")
-          if [[ "$MERGED_PR_RECOVERY" != "true" ]]; then
-            brew pr-pull "${args[@]}" "$PULL_REQUEST"
-            exit 0
-          fi
-
           test "$GITHUB_REF" = "refs/heads/main"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
 
           pr_json="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PULL_REQUEST")"
           actual_head="$(jq -r .head.sha <<<"$pr_json")"
           base_ref="$(jq -r .base.ref <<<"$pr_json")"
-          base_sha="$(jq -r .base.sha <<<"$pr_json")"
-          merge_sha="$(jq -r .merge_commit_sha <<<"$pr_json")"
+          state="$(jq -r .state <<<"$pr_json")"
           merged="$(jq -r .merged <<<"$pr_json")"
 
-          test "$merged" = "true"
           test "$base_ref" = "main"
           test "$actual_head" = "$HEAD_SHA"
           git fetch --no-tags origin \
-            "refs/heads/$base_ref:refs/remotes/origin/$base_ref" \
-            "refs/pull/$PULL_REQUEST/head"
+            "refs/heads/$base_ref:refs/remotes/origin/$base_ref"
+          test "$(git rev-parse "refs/remotes/origin/$base_ref")" = "$GITHUB_SHA"
+
+          if [[ "$MERGED_PR_RECOVERY" != "true" ]]; then
+            if [[ "$state" != "open" || "$merged" != "false" ]]; then
+              if [[ "$merged" = "true" ]]; then
+                echo "::error title=Formula PR already merged::PR #$PULL_REQUEST is already merged. The ordinary brew pr-pull path owns landing. Review the recovery guards, then dispatch from main with merged_pr_recovery=true."
+              else
+                echo "::error title=Formula PR is not open::PR #$PULL_REQUEST must remain open for the ordinary brew pr-pull path."
+              fi
+              exit 1
+            fi
+            brew pr-pull "${args[@]}" "$PULL_REQUEST"
+            exit 0
+          fi
+
+          base_sha="$(jq -r .base.sha <<<"$pr_json")"
+          merge_sha="$(jq -r .merge_commit_sha <<<"$pr_json")"
+
+          test "$merged" = "true"
+          git fetch --no-tags origin "refs/pull/$PULL_REQUEST/head"
           git cat-file -e "$base_sha^{commit}"
           git cat-file -e "$HEAD_SHA^{commit}"
           git cat-file -e "$merge_sha^{commit}"
-          test "$(git rev-parse "refs/remotes/origin/$base_ref")" = "$GITHUB_SHA"
           read -r commit parent_one parent_two extra < <(git rev-list --parents -n 1 "$merge_sha")
           test "$commit" = "$merge_sha"
           test "$parent_one" = "$base_sha"

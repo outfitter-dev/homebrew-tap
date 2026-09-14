@@ -26,12 +26,14 @@ brew "blz"
 
 The `blz` release workflow opens a formula pull request in this repository. The [`brew test-bot`](.github/workflows/tests.yml) workflow audits the formula, tests installation, and uploads bottles for macOS and Linux.
 
-After every `brew test-bot` job passes, run the [`brew pr-pull`](.github/workflows/publish.yml) workflow from GitHub Actions with both of these inputs:
+Keep the formula pull request open while it is reviewed. **Do not merge it with GitHub's merge button.** After every `brew test-bot` job passes, run the [`brew pr-pull`](.github/workflows/publish.yml) workflow from the `main` branch with both of these inputs:
 
 - `pull_request`: the formula pull request number.
 - `head_sha`: the pull request's tested head commit SHA.
 
-The head SHA guard prevents publishing if the pull request changed after its successful test run. `brew pr-pull` downloads the bottle artifacts, updates the formula, uploads the bottles to a GitHub release, and pushes the resulting commit to `main`.
+The head SHA guard prevents publishing if the pull request changed after its successful test run. `brew pr-pull` owns the landing operation: it downloads the bottle artifacts, updates the formula, uploads the bottles to a GitHub release, and pushes the resulting commit to `main`. Publication runs are serialized so two formula updates cannot race to push the tap.
+
+If a formula pull request was already merged manually, stop instead of rerunning the ordinary path or reverting the formula. The workflow's `merged_pr_recovery` input is an emergency path that validates the exact reviewed head, merge topology, current `main`, ancestry, and formula contents before creating the missing bottle commit.
 
 See [Homebrew's documentation](https://docs.brew.sh) for general Homebrew usage.
 
@@ -45,4 +47,4 @@ brew install outfitter-dev/tap/skillset
 
 Upgrade or uninstall it with `brew upgrade skillset` or `brew uninstall skillset`.
 
-Formula updates arrive through a tested pull request and are merged only after tap CI passes.
+Formula updates arrive through a tested pull request and are landed by `brew pr-pull` only after tap CI passes.
