@@ -83,14 +83,13 @@ jobs:
           fi
 
           required_checks=(
-            "publish-runtime"
             "test-bot (macos-26)"
             "test-bot (macos-15-intel)"
             "test-bot (ubuntu-latest, ghcr.io/homebrew/brew:main, --privileged)"
             "test-bot (ubuntu-24.04-arm, ghcr.io/homebrew/brew:main, --privileged)"
           )
           if [[ "$MERGED_PR_RECOVERY" != "true" ]]; then
-            required_checks+=("formula-landing-policy")
+            required_checks+=("publish-runtime" "formula-landing-policy")
           fi
           check_json="$(gh api --paginate \
             "repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA/check-runs?filter=latest&per_page=100")"

@@ -25,7 +25,16 @@ jobs:
         run: |
           formula_files="$(gh api --paginate \
             "repos/$GITHUB_REPOSITORY/pulls/$PULL_REQUEST/files?per_page=100" \
-            --jq '.[] | select(.filename | startswith("Formula/")) | .filename')"
+            --jq '.[] |
+              select(
+                (.filename | startswith("Formula/")) or
+                ((.previous_filename // "") | startswith("Formula/"))
+              ) |
+              if .previous_filename then
+                "\(.previous_filename) -> \(.filename)"
+              else
+                .filename
+              end')"
 
           if [[ -z "$formula_files" ]]; then
             exit 0
