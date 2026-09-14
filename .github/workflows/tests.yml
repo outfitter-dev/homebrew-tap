@@ -40,6 +40,15 @@ jobs:
           grep -q -- '--no-cherry-pick' <<<"$help"
           grep -q -- '--clean' <<<"$help"
 
+          workflow=".github/workflows/publish.yml"
+          dollar='$'
+          grep -Fq 'uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0' "$workflow"
+          grep -Fq "client-id: ${dollar}{{ vars.BREW_COMMIT_CLIENT_ID }}" "$workflow"
+          grep -Fq "private-key: ${dollar}{{ secrets.HOMEBREW_PUBLISHER_APP_PRIVATE_KEY }}" "$workflow"
+          grep -Fq 'permission-actions: read' "$workflow"
+          test "$(grep -Fc "${dollar}{{ steps.publisher_token.outputs.token }}" "$workflow")" -eq 3
+          test "$(grep -Fc "${dollar}{{ secrets.GITHUB_TOKEN }}" "$workflow")" -eq 1
+
   test-bot:
     strategy:
       fail-fast: false
