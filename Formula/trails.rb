@@ -5,34 +5,27 @@ class Trails < Formula
   # Keep this scheme after the reset from 1.0.0-beta to 0.2.0.
   version_scheme 1
 
-  bottle do
-    root_url "https://github.com/outfitter-dev/homebrew-tap/releases/download/trails-0.2.2"
-    sha256 cellar: :any,                 arm64_tahoe:  "81bd8258aa92cf00e6e4639e0b7ed5bc104453fec48bd3a8c63cb638a80d06d7"
-    sha256 cellar: :any_skip_relocation, arm64_linux:  "a89022893014db861bb98fdc60ef4a196a6e71b69770ef2454951422f2be494c"
-    sha256 cellar: :any_skip_relocation, x86_64_linux: "c0e4b93e2f8baac70226d06d5adfdb75a9276ab9282d6e5af70e93c30b3ca386"
-  end
-
   depends_on "bun"
 
   on_macos do
     on_arm do
-      url "https://github.com/outfitter-dev/trails/releases/download/v0.2.2/trails-v0.2.2-darwin-arm64.tar.gz"
-      sha256 "1229cbb4ad0eb486eeb7a25ae47e418791875820fd411b95418fb6bc42f35f9e"
+      url "https://github.com/outfitter-dev/trails/releases/download/v0.2.3/trails-v0.2.3-darwin-arm64.tar.gz"
+      sha256 "1914f6adf96ec8f595de4bfc235db2b21a3317b8eef48be07b19eeffab634f28"
     end
     on_intel do
-      url "https://github.com/outfitter-dev/trails/releases/download/v0.2.2/trails-v0.2.2-darwin-x64.tar.gz"
-      sha256 "c9a90780152399cce10850e9d66492c20a9bc1ebb1966e29996006bb8bc588b0"
+      url "https://github.com/outfitter-dev/trails/releases/download/v0.2.3/trails-v0.2.3-darwin-x64.tar.gz"
+      sha256 "4dc50fabecec0ab9079148663c6402e03e4a2061f1c7870cb76fa6fe1fd82037"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://github.com/outfitter-dev/trails/releases/download/v0.2.2/trails-v0.2.2-linux-arm64.tar.gz"
-      sha256 "b0b70230eba328fae1c630995af01ced7c41ccf9ceb74c7c07b3f4c2e5307127"
+      url "https://github.com/outfitter-dev/trails/releases/download/v0.2.3/trails-v0.2.3-linux-arm64.tar.gz"
+      sha256 "75d6ed36a770224dd4e847b5ef0d8c1b093ab9114ea5c3310c616bc36125a8a4"
     end
     on_intel do
-      url "https://github.com/outfitter-dev/trails/releases/download/v0.2.2/trails-v0.2.2-linux-x64.tar.gz"
-      sha256 "855449446c7ccefea04542486603de1db8bb1349297bf70c42e1c785a3a5513e"
+      url "https://github.com/outfitter-dev/trails/releases/download/v0.2.3/trails-v0.2.3-linux-x64.tar.gz"
+      sha256 "3e96ac7503fe8bcfc9079b96e40f4befc179984fa6b578bf30e98f171ec2d1cb"
     end
   end
 
