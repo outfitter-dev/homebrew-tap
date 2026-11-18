@@ -1,21 +1,15 @@
 class Skillset < Formula
   desc "Source-first compiler for provider-native agent loadouts"
   homepage "https://github.com/outfitter-dev/skillset"
-  url "https://github.com/outfitter-dev/skillset/releases/download/v0.29.0/skillset-v0.29.0-darwin-arm64.tar.gz"
-  sha256 "cdc0005ba455a93feaa153cb8f303fc948d01a677a04f9a8b5e4e3df3003d939"
+  url "https://github.com/outfitter-dev/skillset/releases/download/v0.31.0/skillset-v0.31.0-darwin-arm64.tar.gz"
+  sha256 "072c929b56b98743a51bbdc381065a752383534c87f4e07d0e4397cf32c5b713"
   license "MIT"
-
-  bottle do
-    root_url "https://github.com/outfitter-dev/homebrew-tap/releases/download/skillset-0.29.0"
-    sha256                               arm64_tahoe: "41cf3909f7be13c4d9e107224e9c2949035707ae0acfa9f8d44137c0d2ce5581"
-    sha256 cellar: :any_skip_relocation, sequoia:     "79c32839a4c47244688e5cec047ddc1958289c474ac1b20b616a31c4e2035920"
-  end
   depends_on :macos
 
   on_macos do
     on_intel do
-      url "https://github.com/outfitter-dev/skillset/releases/download/v0.29.0/skillset-v0.29.0-darwin-x64.tar.gz"
-      sha256 "0c85fabf9bbcd75e98b597cddbc6300cf0d871881c977bcbdcfb5225a62e2cd3"
+      url "https://github.com/outfitter-dev/skillset/releases/download/v0.31.0/skillset-v0.31.0-darwin-x64.tar.gz"
+      sha256 "96f48b296c1c417d2b6b15ce96ddb8379c3b5c7ce688e9219bddc0f714125aef"
     end
   end
 
