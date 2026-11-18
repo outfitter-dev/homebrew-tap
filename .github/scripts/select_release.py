@@ -2,6 +2,7 @@
 
 import base64
 from dataclasses import dataclass
+from hashlib import sha256
 import json
 import os
 import re
@@ -9,6 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 from string import Template
+from tempfile import TemporaryDirectory
 from urllib.parse import urlencode
 
 
@@ -17,6 +19,7 @@ CONFIG_DIR = Path(__file__).resolve().parents[1]
 ALLOWLIST_PATH = CONFIG_DIR / "autopublish.yaml"
 RELEASE_POLICY = CONFIG_DIR / "workflows" / "release-policy"
 SUPPORT_PATH = RELEASE_POLICY / "install-support.json"
+AUTHORIZATION_PATH = RELEASE_POLICY / "upstream-authorization.json"
 VERSION = r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
 SHA = r"[0-9a-f]{40}"
 BRANCHES = {
@@ -174,7 +177,109 @@ def generate_formula(project, branch_version, current, release, archives):
                 f"Release asset or SHA-256 digest is missing or ambiguous for {platform}")
         digests[platform] = matches[0].removeprefix("sha256:")
 
-    return render_formula(project, tag, digests)
+    return render_formula(project, tag, digests), {
+        f"{project}-{tag}-{platform}.tar.gz": digest for platform, digest in digests.items()
+    }
+
+
+def load_authorization(project):
+    with AUTHORIZATION_PATH.open(encoding="utf-8") as policy_file:
+        policies = json.load(policy_file, object_pairs_hook=unique_keys)
+    require(policies.keys() == BRANCHES.keys(), "Upstream authorization policy is incomplete")
+    policy = policies[project]
+    require(policy is not None, f"{project} has no automatic upstream authorization policy; review manually")
+    ids = ("repository_id", "workflow_id")
+    names = ("approval_environment", "approval_job", "publication_job")
+    require(isinstance(policy, dict) and policy.keys() == {*ids, *names, "approver_ids"}
+            and all(type(policy[key]) is int and policy[key] > 0 for key in ids)
+            and all(isinstance(policy[key], str) and policy[key] for key in names)
+            and policy["approval_job"] != policy["publication_job"]
+            and isinstance(policy["approver_ids"], list) and policy["approver_ids"]
+            and all(type(i) is int and i > 0 for i in policy["approver_ids"]),
+            f"Invalid upstream authorization policy for {project}")
+    return policy
+
+
+def verified_manifest(upstream, tag, commit, asset):
+    signer = f"https://github.com/{upstream}/.github/workflows/release.yml@refs/heads/main"
+    with TemporaryDirectory() as directory:
+        path = Path(directory) / "manifest.json"
+        subprocess.run(["gh", "release", "download", tag, "--repo", upstream, "--pattern", asset["name"],
+                        "--output", str(path)], check=True, timeout=60)
+        require(path.stat().st_size == asset["size"], "Upstream manifest download size changed")
+        content = path.read_bytes()
+        require(f"sha256:{sha256(content).hexdigest()}" == asset["digest"], "Upstream manifest digest changed")
+        attestations = json.loads(subprocess.check_output([
+            "gh", "attestation", "verify", str(path), "--repo", upstream, "--cert-identity", signer,
+            "--source-ref", "refs/heads/main", "--source-digest", commit, "--deny-self-hosted-runners",
+            "--format", "json",
+        ], text=True, timeout=120))
+    return json.loads(content, object_pairs_hook=unique_keys), attestations
+
+
+def verify_upstream_authorization(project, release, digests):
+    try:
+        _verify_upstream_authorization(project, release, digests, load_authorization(project))
+    except (subprocess.SubprocessError, OSError, ValueError, KeyError, IndexError, TypeError, AttributeError) as error:
+        raise NotEligible(f"Cannot verify upstream authorization for {project}; review manually") from error
+
+
+def _verify_upstream_authorization(project, release, digests, policy):
+    upstream = f"outfitter-dev/{project}"
+    root = f"repos/{upstream}"
+    tag = release["tag_name"]
+    ref = api(f"{root}/git/ref/tags/{tag}")["object"]
+    commit = ref["sha"]
+    require(ref["type"] == "commit" and re.fullmatch(SHA, commit),
+            "Upstream release tag must resolve directly to an exact commit")
+    manifests = [asset for asset in release["assets"] if asset["name"] == f"{project}-{tag}-manifest.json"]
+    require(len(manifests) == 1 and manifests[0]["state"] == "uploaded" and 0 < manifests[0]["size"] <= 1_048_576,
+            "Missing unambiguous upstream authorization manifest")
+    manifest, attestations = verified_manifest(upstream, tag, commit, manifests[0])
+    require(manifest["version"] == tag[1:] and manifest["commit"] == commit,
+            "Attested manifest is not for this tag and source commit")
+    for name, digest in digests.items():
+        matches = [entry["sha256"] for entry in manifest["artifacts"] if entry["archive"] == name]
+        require(matches == [digest], f"Attested manifest does not authorize the exact asset {name}")
+
+    # The invocation must come from the verified certificate, not the workflow-controlled predicate.
+    invocations = set()
+    for attestation in attestations:
+        cert = attestation["verificationResult"]["signature"]["certificate"]
+        match = re.fullmatch(rf"https://github\.com/{re.escape(upstream)}/actions/runs/([1-9][0-9]*)/attempts/1",
+                             cert["runInvocationURI"])
+        if (match and cert["sourceRepositoryIdentifier"] == str(policy["repository_id"])
+                and cert["buildTrigger"] in ("push", "workflow_dispatch")):
+            invocations.add((int(match[1]), cert["buildTrigger"]))
+    require(len(invocations) == 1, "No unambiguous first-attempt upstream workflow identity in the attestation")
+    run_id, event = invocations.pop()
+    endpoint = f"{root}/actions/runs/{run_id}"
+    run = api(endpoint)
+    require(run["id"] == run_id and run["workflow_id"] == policy["workflow_id"]
+            and run["path"] == ".github/workflows/release.yml"
+            and run["repository"]["id"] == run["head_repository"]["id"] == policy["repository_id"]
+            and run["head_branch"] == "main" and run["head_sha"] == commit and run["event"] == event
+            and run["run_attempt"] == 1 and run["status"] == "completed" and run["conclusion"] == "success",
+            "Attested upstream workflow is not a successful release of the exact source")
+    actors = {run["actor"]["id"], run["triggering_actor"]["id"]}
+    decisions = [review for review in api(f"{endpoint}/approvals")
+                 if any(e["name"] == policy["approval_environment"] for e in review["environments"])]
+    require(not any(review["state"] != "approved" for review in decisions)
+            and any(review["user"]["type"] == "User" and review["user"]["id"] in policy["approver_ids"]
+                    and review["user"]["id"] not in actors for review in decisions),
+            "No independent upstream approval for the attested release run")
+
+    jobs = list(pages(f"{endpoint}/attempts/1/jobs?per_page=100", "jobs"))
+    completed = []
+    for key in ("approval_job", "publication_job"):
+        matches = [job for job in jobs if job["name"] == policy[key]]
+        require(len(matches) == 1 and matches[0]["run_id"] == run_id and matches[0]["head_sha"] == commit
+                and matches[0]["status"] == "completed" and matches[0]["conclusion"] == "success",
+                f"Attested run did not pass its {key.replace('_', ' ')}")
+        completed.append(matches[0])
+    approval, publication = completed
+    require(approval["completed_at"] <= publication["started_at"] <= release["published_at"]
+            <= publication["completed_at"], "GitHub release was not published by the independently approved run")
 
 
 def verify_reviews(number, head, base, author, *, publishing=True):
@@ -252,11 +357,12 @@ def release_draft(pr, base, allowlist, expected_head=None, *, publishing=True):
 
 
 def verify_formula(draft, base, support):
-    expected = generate_formula(draft.project, draft.branch_version, formula_at(draft.path, base),
-                                api(f"repos/outfitter-dev/{draft.project}/releases/latest"),
-                                support[draft.project]["formula_archive"])
+    release = api(f"repos/outfitter-dev/{draft.project}/releases/latest")
+    expected, digests = generate_formula(draft.project, draft.branch_version, formula_at(draft.path, base),
+                                         release, support[draft.project]["formula_archive"])
     require(formula_at(draft.path, draft.head) == expected,
             "Full formula must match the reviewed template and verified release")
+    verify_upstream_authorization(draft.project, release, digests)
     return expected
 
 

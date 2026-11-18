@@ -36,6 +36,7 @@ Successful tap CI wakes a read-only scan in [`brew pr-pull`](.github/workflows/p
 
 - The reviewed [`autopublish.yaml`](.github/autopublish.yaml) on current `main` lists which upstream repositories can publish automatically. It lists Skillset and Trails. Use a JSON-style YAML list of supported `owner/repository` names; an empty list disables automatic publication, and a missing or invalid file fails closed.
 - Only same-tap stable release drafts from listed upstreams qualify. Every byte of the formula must match what the [reviewed template](.github/workflows/release-policy) generates from the latest stable upstream release and its GitHub asset digests. The version must advance. An npm release alone does not qualify.
+- [Upstream authorization](.github/workflows/release-policy/upstream-authorization.json) is separate from tap review. Skillset must provide a signed release manifest binding the tag's source commit and consumed archive digests to its release workflow. The signed workflow run must itself show an independent npm environment approval followed by successful publish and release jobs. A missing proof, mismatched asset, or rerun stays manual; Trails stays manual until it has a reviewed policy and equivalent release evidence.
 - The draft must contain one release commit on current `main` and touch only its formula. Drafts with other changes, such as a Skillset README update, are not candidates for automatic publication.
 - [Install support](.github/workflows/release-policy/install-support.json) is reviewed per project, platform, and method. `formula_archive` means the upstream asset consumed by the formula; `homebrew_bottle` means tap-built evidence. Only an explicit `unsupported` target waives the evidence for that method. Unknown support, missing assets, or absent or expired bottles on supported targets block publication. This policy does not change the GitHub CI matrix or required checks.
 - Both tap workflows, every required check, and GitHub's merge/review rules must pass. A maintainer other than the PR author must approve the exact head SHA; changes requested or unresolved review threads block publication.
@@ -45,7 +46,7 @@ The current `blz` handoff does not create a draft and is not eligible for automa
 
 ### Manual publication and recovery
 
-After review and every required Homebrew check passes, run the [`brew pr-pull`](.github/workflows/publish.yml) workflow from the `main` branch with both of these inputs:
+Independently review the upstream release evidence and the exact tap draft before using the manual path. Stop if the evidence or a required check does not pass. After review and every required Homebrew check passes, run the [`brew pr-pull`](.github/workflows/publish.yml) workflow from the `main` branch with both of these inputs:
 
 - `pull_request`: the formula pull request number.
 - `head_sha`: the pull request's tested head commit SHA.

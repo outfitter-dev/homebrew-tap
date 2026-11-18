@@ -1,0 +1,11 @@
+{
+  "trails": null,
+  "skillset": {
+    "repository_id": 1258750503,
+    "workflow_id": 295948587,
+    "approver_ids": [25037981],
+    "approval_environment": "npm",
+    "approval_job": "Publish coordinated set to npm manually",
+    "publication_job": "Create or Reconcile GitHub Release"
+  }
+}

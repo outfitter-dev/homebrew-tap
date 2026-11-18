@@ -72,6 +72,9 @@ class EligibilityTests(unittest.TestCase):
         api = patch.object(gate, "api", side_effect=self.github_api)
         self.api = api.start()
         self.addCleanup(api.stop)
+        authorization = patch.object(gate, "verify_upstream_authorization")
+        self.authorization = authorization.start()
+        self.addCleanup(authorization.stop)
 
     def github_api(self, *args):
         endpoint = args[-1]
@@ -101,6 +104,12 @@ class EligibilityTests(unittest.TestCase):
         allowlist = gate.load_allowlist(gate.ALLOWLIST_PATH)
         self.assertEqual(gate.eligible(self.pr, BASE, allowlist, SUPPORT), (NUMBER, HEAD))
         self.assertEqual(gate.eligible(self.pr, BASE, allowlist, SUPPORT, expected_head=HEAD), (NUMBER, HEAD))
+
+    def test_upstream_authorization_is_required_for_publication_and_refresh(self):
+        self.authorization.side_effect = gate.NotEligible("upstream authorization denied")
+        self.assert_ineligible("upstream authorization denied")
+        with self.assertRaisesRegex(gate.NotEligible, "upstream authorization denied"):
+            self.plan_stale_refresh()
 
     def test_skillset_requires_a_verified_release_and_both_mac_bottles(self):
         self.project = "skillset"
