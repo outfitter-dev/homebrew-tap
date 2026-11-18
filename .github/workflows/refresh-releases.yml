@@ -31,7 +31,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Find an independently approved stale release
+      - name: Find an independently authorized stale release
         id: plan
         env:
           GH_TOKEN: ${{ github.token }}

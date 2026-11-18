@@ -39,7 +39,7 @@ Successful tap CI wakes a read-only scan in [`brew pr-pull`](.github/workflows/p
 - [Upstream authorization](.github/workflows/release-policy/upstream-authorization.json) is separate from tap review. Skillset must provide a signed release manifest binding the tag's source commit and consumed archive digests to its release workflow. The signed workflow run must itself show an independent npm environment approval followed by successful publish and release jobs. A missing proof, mismatched asset, or rerun stays manual; Trails stays manual until it has a reviewed policy and equivalent release evidence.
 - The draft must contain one release commit on current `main` and touch only its formula. Drafts with other changes, such as a Skillset README update, are not candidates for automatic publication.
 - [Install support](.github/workflows/release-policy/install-support.json) is reviewed per project, platform, and method. `formula_archive` means the upstream asset consumed by the formula; `homebrew_bottle` means tap-built evidence. Only an explicit `unsupported` target waives the evidence for that method. Unknown support, missing assets, or absent or expired bottles on supported targets block publication. This policy does not change the GitHub CI matrix or required checks.
-- Both tap workflows, every required check, and GitHub's merge/review rules must pass. A maintainer other than the PR author must approve the exact head SHA; changes requested or unresolved review threads block publication.
+- Both tap workflows, every required check, and GitHub's merge and review rules must pass on the selected head. Verified independent upstream approval replaces the selector's separate tap signoff, not any review GitHub requires. Outstanding maintainer changes requested or unresolved review threads still block publication.
 - The publisher checks eligibility before setting up Homebrew and again before invoking `brew pr-pull`. It does not automatically run merged-PR recovery.
 
 The current `blz` handoff does not create a draft and is not eligible for automation.
@@ -63,9 +63,9 @@ See [Homebrew's documentation](https://docs.brew.sh) for general Homebrew usage.
 
 ### Refresh stale release drafts
 
-When enabled, [the refresh workflow](.github/workflows/refresh-releases.yml) scans after pushes to `main` and twice an hour. It refreshes an independently approved stale draft only if its old parent is in `main` history, the published formula has not changed since that parent, and the draft still matches the trusted template and verified release. It regenerates one formula commit from current `main` and updates only the release branch, using a lease against the old head.
+When enabled, [the refresh workflow](.github/workflows/refresh-releases.yml) scans after pushes to `main` and twice an hour. It refreshes a stale draft only if its old parent is in `main` history, the published formula has not changed since that parent, and the draft still matches the trusted template and independently authorized release. It regenerates one formula commit from current `main` and updates only the release branch, using a lease against the old head.
 
-The refresh push starts normal PR CI. The refreshed head needs fresh CI, bottles, and independent approval before publication. An unresolved review, a noncanonical draft, or a newer upstream release not matching the draft blocks regeneration.
+The refresh push starts normal PR CI. The refreshed head needs fresh CI, bottles, and any GitHub-required reviews before publication. An unresolved review, a noncanonical draft, or a newer upstream release not matching the draft blocks regeneration.
 
 Refresh is off by default. To enable it, install a separate tap-only GitHub App with Contents write and Pull requests read access and no ruleset bypass. Configure `HOMEBREW_REFRESH_APP_CLIENT_ID` and `HOMEBREW_REFRESH_APP_PRIVATE_KEY`, then set `HOMEBREW_AUTO_REFRESH` to `true`. Both automation switches must be on for refresh to run. The refresher never uses the publisher credential.
 

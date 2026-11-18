@@ -1,4 +1,4 @@
-"""Regenerate an approved stale release draft without publishing it."""
+"""Regenerate an authorized stale release draft without publishing it."""
 
 import os
 from pathlib import Path
@@ -56,7 +56,7 @@ def apply_refresh(number, head, base, allowlist, support):
     gate.require(draft == latest and formula == regenerated, "Release inputs changed while preparing the refresh")
     gate.require(gate.current_main() == base, "main moved while preparing the refresh")
     push_commit(draft, commit)
-    print(f"Refreshed release draft #{draft.number} to {commit}; awaiting fresh CI and approval")
+    print(f"Refreshed release draft #{draft.number} to {commit}; awaiting fresh CI and any required reviews")
 
 
 def main():

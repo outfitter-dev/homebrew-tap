@@ -27,6 +27,7 @@ PLATFORMS = ("darwin-arm64", "darwin-x64", "linux-arm64", "linux-x64")
 DIGEST = "a" * 64
 ALLOWLIST = frozenset({"outfitter-dev/trails"})
 SUPPORT = gate.load_support(gate.SUPPORT_PATH)
+VERIFY_AUTHORIZATION = gate.verify_upstream_authorization
 
 
 def formula(tag, project="trails"):
@@ -59,7 +60,7 @@ class EligibilityTests(unittest.TestCase):
         self.runs = {"tests.yml": [self.run_info], "formula-landing-policy.yml": [deepcopy(self.run_info)]}
         self.review = {
             "state": "APPROVED", "authorCanPushToRepository": True,
-            "author": {"__typename": "User", "login": "maintainer"}, "commit": {"oid": HEAD},
+            "author": {"__typename": "User", "login": "maintainer"},
         }
         self.review_state = {
             "state": "OPEN", "isDraft": True, "headRefOid": HEAD, "baseRefOid": BASE,
@@ -100,18 +101,19 @@ class EligibilityTests(unittest.TestCase):
         with self.assertRaisesRegex(gate.NotEligible, reason):
             gate.eligible(self.pr, BASE, ALLOWLIST, SUPPORT, **kwargs)
 
-    def test_verified_release_and_exact_approved_head(self):
+    def test_verified_release_on_the_selected_head(self):
         allowlist = gate.load_allowlist(gate.ALLOWLIST_PATH)
         self.assertEqual(gate.eligible(self.pr, BASE, allowlist, SUPPORT), (NUMBER, HEAD))
         self.assertEqual(gate.eligible(self.pr, BASE, allowlist, SUPPORT, expected_head=HEAD), (NUMBER, HEAD))
 
-    def test_upstream_authorization_is_required_for_publication_and_refresh(self):
-        self.authorization.side_effect = gate.NotEligible("upstream authorization denied")
-        self.assert_ineligible("upstream authorization denied")
-        with self.assertRaisesRegex(gate.NotEligible, "upstream authorization denied"):
+    def test_trails_policy_blocks_publication_and_refresh_without_upstream_proof(self):
+        self.authorization.side_effect = VERIFY_AUTHORIZATION
+        self.review_state["latestOpinionatedReviews"]["nodes"] = []
+        self.assert_ineligible("trails has no automatic upstream authorization policy")
+        with self.assertRaisesRegex(gate.NotEligible, "trails has no automatic upstream authorization policy"):
             self.plan_stale_refresh()
 
-    def test_skillset_requires_a_verified_release_and_both_mac_bottles(self):
+    def test_skillset_with_upstream_proof_and_both_bottles_needs_no_separate_tap_approval(self):
         self.project = "skillset"
         self.path = "Formula/skillset.rb"
         self.pr["head"]["ref"] = "release/skillset"
@@ -128,9 +130,13 @@ class EligibilityTests(unittest.TestCase):
         ]
         self.artifacts = [{"name": f"bottles_{runner}", "expired": False, "size_in_bytes": 100}
                           for runner in ("macos-26", "macos-15-intel")]
+        self.review_state["latestOpinionatedReviews"]["nodes"] = []
         allowlist = gate.load_allowlist(gate.ALLOWLIST_PATH)
         self.assertEqual(gate.eligible(self.pr, BASE, allowlist, SUPPORT), (NUMBER, HEAD))
         self.assertEqual(gate.eligible(self.pr, BASE, allowlist, SUPPORT, expected_head=HEAD), (NUMBER, HEAD))
+        self.authorization.assert_called_with(self.project, self.release, {
+            f"skillset-{tag}-{platform}.tar.gz": DIGEST for platform in platforms
+        })
         self.artifacts.pop()
         with self.assertRaisesRegex(gate.NotEligible, "missing unexpired bottle artifacts"):
             gate.eligible(self.pr, BASE, allowlist, SUPPORT)
@@ -176,36 +182,19 @@ class EligibilityTests(unittest.TestCase):
         self.artifacts[1]["expired"] = True
         self.assert_ineligible("missing unexpired bottle artifacts")
 
-    def test_review_requires_a_maintainer_and_the_exact_head(self):
-        self.review["commit"]["oid"] = OLD_HEAD
-        self.assert_ineligible("approval of the exact head")
-        self.review["commit"]["oid"] = HEAD
-        self.review["authorCanPushToRepository"] = False
-        self.assert_ineligible("approval of the exact head")
-        self.review["authorCanPushToRepository"] = True
-        self.review["state"] = "DISMISSED"
-        self.assert_ineligible("approval of the exact head")
-
     def test_unresolved_threads_and_github_review_requirements_block(self):
         self.review_state["reviewThreads"]["nodes"] = [{"isResolved": False}]
         self.assert_ineligible("Review threads")
         self.review_state["reviewThreads"]["nodes"] = []
         self.review_state["reviewDecision"] = "REVIEW_REQUIRED"
         self.assert_ineligible("required reviews")
+        self.review_state["reviewDecision"] = None
+        self.review_state["mergeStateStatus"] = "BLOCKED"
+        self.assert_ineligible("GitHub merge checks")
 
-    def test_approved_head_still_blocks_if_changes_requested(self):
-        blocker = deepcopy(self.review)
-        blocker["author"]["login"] = "another-maintainer"
-        blocker["state"] = "CHANGES_REQUESTED"
-        self.review_state["latestOpinionatedReviews"]["nodes"].append(blocker)
+    def test_maintainer_objection_blocks_without_a_required_approval(self):
+        self.review["state"] = "CHANGES_REQUESTED"
         self.assert_ineligible("outstanding changes requested")
-
-    def test_stale_approval_does_not_veto_a_current_approval(self):
-        stale = deepcopy(self.review)
-        stale["author"]["login"] = "another-maintainer"
-        stale["commit"]["oid"] = OLD_HEAD
-        self.review_state["latestOpinionatedReviews"]["nodes"].append(stale)
-        self.assertEqual(gate.eligible(self.pr, BASE, ALLOWLIST, SUPPORT), (NUMBER, HEAD))
 
     def test_preview_or_missing_assets_do_not_qualify(self):
         self.release["prerelease"] = True
@@ -267,14 +256,15 @@ class EligibilityTests(unittest.TestCase):
             return refresh.refresh_candidate(self.pr, BASE, ALLOWLIST, SUPPORT, **kwargs)
 
     def test_refresh_freshens_an_authorized_stale_draft_without_using_old_ci(self):
+        self.review_state["latestOpinionatedReviews"]["nodes"] = []
         self.runs["tests.yml"] = []
         draft, expected = self.plan_stale_refresh(expected_head=HEAD)
         self.assertEqual((draft.head, draft.parent, expected), (HEAD, OLD_HEAD, self.proposed))
         self.assertFalse(any("/actions/" in str(call) for call in self.api.call_args_list))
 
-    def test_refresh_denies_unapproved_otherwise_canonical_candidate(self):
-        self.review["author"]["login"] = self.pr["user"]["login"]
-        with self.assertRaisesRegex(gate.NotEligible, "approval of the exact head"):
+    def test_refresh_preserves_required_github_reviews(self):
+        self.review_state["reviewDecision"] = "REVIEW_REQUIRED"
+        with self.assertRaisesRegex(gate.NotEligible, "required reviews"):
             self.plan_stale_refresh()
 
     def test_refresh_denies_unresolved_reviews_or_changed_review_head(self):

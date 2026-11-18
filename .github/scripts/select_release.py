@@ -44,7 +44,7 @@ query($number: Int!) {
       }
       latestOpinionatedReviews(first: 100) {
         pageInfo { hasNextPage }
-        nodes { state authorCanPushToRepository author { __typename login } commit { oid } }
+        nodes { state authorCanPushToRepository author { __typename login } }
       }
     }
   }
@@ -285,10 +285,11 @@ def _verify_upstream_authorization(project, release, digests, policy):
 
 def verify_reviews(number, head, base, author, *, publishing=True):
     pr = api("graphql", "-f", f"query={PR_REVIEW_QUERY}", "-F", f"number={number}")["data"]["repository"]["pullRequest"]
+    allowed_states = ("CLEAN",) if publishing else ("CLEAN", "BEHIND")
     require(
         pr is not None and pr["state"] == "OPEN" and pr["isDraft"]
         and pr["headRefOid"] == head and pr["baseRefOid"] == base
-        and (not publishing or pr["mergeStateStatus"] == "CLEAN")
+        and pr["mergeStateStatus"] in allowed_states
         and pr["reviewDecision"] in (None, "APPROVED"),
         "GitHub merge checks or required reviews are not satisfied for this draft head and base",
     )
@@ -302,11 +303,8 @@ def verify_reviews(number, head, base, author, *, publishing=True):
         if review["authorCanPushToRepository"] and review["author"]
         and review["author"]["__typename"] == "User" and review["author"]["login"] != author
     ]
-    exact_approval = any(r["state"] == "APPROVED" and r["commit"] and r["commit"]["oid"] == head
-                         for r in maintainers)
-    require(exact_approval
-            and not any(r["state"] == "CHANGES_REQUESTED" for r in maintainers),
-            "Maintainer approval of the exact head is required, without outstanding changes requested")
+    require(not any(r["state"] == "CHANGES_REQUESTED" for r in maintainers),
+            "A maintainer has outstanding changes requested")
 
 
 def verify_runs(number, head, branch, bottle_targets):
