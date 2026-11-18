@@ -120,12 +120,22 @@ class UpstreamAuthorizationTests(unittest.TestCase):
             self.authorize()
 
     def test_wrong_workflow_or_source_commit_fails_closed(self):
-        for key in ("workflow_id", "head_sha", "head_branch", "event"):
+        for key in ("workflow_id", "head_sha", "head_branch", "event", "path"):
             original = self.run[key]
             self.run[key] = "wrong"
             with self.subTest(key=key), self.assertRaisesRegex(gate.NotEligible, "exact source"):
                 self.authorize()
             self.run[key] = original
+
+    def test_run_path_may_be_qualified_by_main_only(self):
+        path = self.run["path"]
+        for suffix in ("@main", "@refs/heads/main"):
+            with self.subTest(suffix=suffix):
+                self.run["path"] = path + suffix
+                self.authorize()
+        self.run["path"] = path + "@other"
+        with self.assertRaisesRegex(gate.NotEligible, "exact source"):
+            self.authorize()
 
     def test_approval_must_be_independent_and_apply_to_this_run_and_environment(self):
         original_environments = self.review["environments"]

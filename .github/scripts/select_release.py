@@ -256,7 +256,8 @@ def _verify_upstream_authorization(project, release, digests, policy):
     endpoint = f"{root}/actions/runs/{run_id}"
     run = api(endpoint)
     require(run["id"] == run_id and run["workflow_id"] == policy["workflow_id"]
-            and run["path"] == ".github/workflows/release.yml"
+            and run["path"] in (".github/workflows/release.yml", ".github/workflows/release.yml@main",
+                                ".github/workflows/release.yml@refs/heads/main")
             and run["repository"]["id"] == run["head_repository"]["id"] == policy["repository_id"]
             and run["head_branch"] == "main" and run["head_sha"] == commit and run["event"] == event
             and run["run_attempt"] == 1 and run["status"] == "completed" and run["conclusion"] == "success",
