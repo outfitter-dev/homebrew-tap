@@ -1,6 +1,13 @@
 name: brew pr-pull
 
 on:
+  workflow_run:
+    workflows: [brew test-bot, formula landing policy]
+    types: [completed]
+    branches: ['release/trails-*', release/skillset]
+  schedule:
+    # Catch approvals submitted after the checks finish, and missed completion events.
+    - cron: '17,47 * * * *'
   workflow_dispatch:
     inputs:
       pull_request:
@@ -21,13 +28,49 @@ defaults:
   run:
     shell: bash -xeuo pipefail {0}
 
-concurrency:
-  group: brew-pr-pull
-  cancel-in-progress: false
-
 jobs:
-  pr-pull:
+  select-release:
+    if: >-
+      github.repository == 'outfitter-dev/homebrew-tap' &&
+      vars.HOMEBREW_AUTO_PUBLISH == 'true' &&
+      (github.event_name == 'schedule' ||
+       (github.event_name == 'workflow_run' &&
+        github.event.workflow_run.event == 'pull_request' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_repository.full_name == github.repository))
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    outputs:
+      pull_request: ${{ steps.release.outputs.pull_request }}
+      head_sha: ${{ steps.release.outputs.head_sha }}
+    steps:
+      - name: Check out the trusted tap revision
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Find a verified upstream release draft
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/select_release.py
+
+  pr-pull:
+    needs: select-release
+    if: >-
+      !cancelled() &&
+      (github.event_name == 'workflow_dispatch' ||
+       (needs.select-release.result == 'success' &&
+        needs.select-release.outputs.pull_request != '' &&
+        needs.select-release.outputs.head_sha != ''))
+    runs-on: ubuntu-latest
+    concurrency:
+      group: brew-pr-pull
+      cancel-in-progress: false
     permissions:
       actions: read
       attestations: write
@@ -36,13 +79,15 @@ jobs:
       id-token: write
       issues: read
       pull-requests: read
+    env:
+      HEAD_SHA: ${{ inputs.head_sha || needs.select-release.outputs.head_sha }}
+      MERGED_PR_RECOVERY: ${{ inputs.merged_pr_recovery }}
+      PULL_REQUEST: ${{ inputs.pull_request || needs.select-release.outputs.pull_request }}
     steps:
-      - name: Validate dispatch before Homebrew setup
+      - name: Validate the selected head before Homebrew setup
+        id: preflight
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HEAD_SHA: ${{ inputs.head_sha }}
-          MERGED_PR_RECOVERY: ${{ inputs.merged_pr_recovery }}
-          PULL_REQUEST: ${{ inputs.pull_request }}
         run: |
           fail() {
             echo "::error title=$1::$2"
@@ -102,8 +147,10 @@ jobs:
             test "$conclusion" = "success" || \
               fail "Formula PR checks incomplete" "The latest GitHub Actions check '$check' at $HEAD_SHA concluded '$conclusion', not 'success'."
           done
+          echo "passed=true" >> "$GITHUB_OUTPUT"
 
       - name: Create publisher token
+        if: steps.preflight.outputs.passed == 'true'
         id: publisher_token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
@@ -114,24 +161,32 @@ jobs:
           permission-pull-requests: write
 
       - name: Set up Homebrew
+        if: steps.preflight.outputs.passed == 'true'
         uses: Homebrew/actions/setup-homebrew@1e34f2e2acaa766b7efacb8c26352e6abbb023f9 # 2026.09.13.1
         with:
           token: ${{ steps.publisher_token.outputs.token }}
 
       - name: Set up git
+        if: steps.preflight.outputs.passed == 'true'
         id: git_setup
         uses: Homebrew/actions/git-user-config@1e34f2e2acaa766b7efacb8c26352e6abbb023f9 # 2026.09.13.1
 
+      - name: Recheck automatic eligibility after setup
+        if: steps.preflight.outputs.passed == 'true' && github.event_name != 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 .github/scripts/select_release.py "$PULL_REQUEST" "$HEAD_SHA"
+
       - name: Pull bottles
+        if: steps.preflight.outputs.passed == 'true'
         id: pull_bottles
         env:
           GH_TOKEN: ${{ steps.publisher_token.outputs.token }}
-          HEAD_SHA: ${{ inputs.head_sha }}
           HOMEBREW_GITHUB_API_TOKEN: ${{ steps.publisher_token.outputs.token }}
           HOMEBREW_GIT_COMMITTER_EMAIL: ${{ steps.git_setup.outputs.email }}
           HOMEBREW_GIT_COMMITTER_NAME: ${{ steps.git_setup.outputs.name }}
-          MERGED_PR_RECOVERY: ${{ inputs.merged_pr_recovery }}
-          PULL_REQUEST: ${{ inputs.pull_request }}
         run: |
           args=(--debug --retain-bottle-dir "--tap=$GITHUB_REPOSITORY" "--head-sha=$HEAD_SHA")
           test "$GITHUB_REF" = "refs/heads/main"
@@ -184,11 +239,13 @@ jobs:
             "${args[@]}" --no-cherry-pick --clean "$PULL_REQUEST"
 
       - name: Attest bottles
+        if: steps.preflight.outputs.passed == 'true'
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: "${{ steps.pull_bottles.outputs.bottle_path }}/*.tar.gz"
 
       - name: Push commits
+        if: steps.preflight.outputs.passed == 'true'
         uses: Homebrew/actions/git-try-push@1e34f2e2acaa766b7efacb8c26352e6abbb023f9 # 2026.09.13.1
         with:
           branch: main

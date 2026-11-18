@@ -24,9 +24,27 @@ brew "blz"
 
 ## Publish A Formula Update
 
-The `blz` release workflow opens a formula pull request in this repository. The [`brew test-bot`](.github/workflows/tests.yml) workflow audits the formula, tests installation, and uploads bottles for macOS and Linux.
+Upstream release workflows open formula pull requests in this repository. The [`brew test-bot`](.github/workflows/tests.yml) workflow audits the formula, tests installation, and uploads bottles for macOS and Linux.
 
-Keep the formula pull request open and in draft while it is reviewed. **Do not mark it ready or merge it with GitHub's merge button.** The `formula-landing-policy` check rejects a formula pull request that is marked ready. After every required Homebrew check passes, run the [`brew pr-pull`](.github/workflows/publish.yml) workflow from the `main` branch with both of these inputs:
+Keep formula pull requests open and in draft. **Do not mark them ready or merge them with GitHub's merge button.** The `formula-landing-policy` check rejects formula pull requests that are marked ready.
+
+### Automatic publication
+
+After reviewing and merging the automation, a tap maintainer can opt in by setting the repository's [Actions variable `HOMEBREW_AUTO_PUBLISH`](https://github.com/outfitter-dev/homebrew-tap/settings/variables/actions) to `true`. Unset it or change it to `false` to stop new automatic jobs; this does not cancel an in-flight job. The manual path is unchanged.
+
+Successful tap CI wakes a read-only scan in [`brew pr-pull`](.github/workflows/publish.yml). A twice-hourly scan picks up approvals submitted after CI and recovers missed events. No-op scans do not enter the serialized publisher job or displace pending manual runs.
+
+- The reviewed [`autopublish.yaml`](.github/autopublish.yaml) on current `main` lists which upstream repositories can publish automatically. Only Trails is listed initially. Use a JSON-style YAML list of supported `owner/repository` names; an empty list disables automatic publication, and a missing or invalid file fails closed.
+- Only same-tap stable release drafts from listed upstreams qualify. The formula must advance the current version and match the URLs and SHA-256 digests of the latest published upstream release. An npm release alone does not qualify: the GitHub assets and tap draft must exist.
+- The draft must contain one release commit on current `main` and touch only the formula (Skillset may also update its README entry). If `main` moves, regenerate or rebase the draft and retest it.
+- Both tap workflows, every required check, and GitHub's merge/review rules must pass. The successful run must still have the bottle artifacts. A maintainer other than the PR author must approve the exact head SHA; changes requested or unresolved review threads block publication. A failed Intel job blocks it too.
+- The publisher checks eligibility before setting up Homebrew and again before invoking `brew pr-pull`. It does not automatically run merged-PR recovery.
+
+Skillset remains manual unless added to the allowlist in a reviewed PR. The current `blz` handoff does not create a draft and is not eligible for automation.
+
+### Manual publication and recovery
+
+After review and every required Homebrew check passes, run the [`brew pr-pull`](.github/workflows/publish.yml) workflow from the `main` branch with both of these inputs:
 
 - `pull_request`: the formula pull request number.
 - `head_sha`: the pull request's tested head commit SHA.

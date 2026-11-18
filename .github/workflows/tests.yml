@@ -27,6 +27,9 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Test automatic release selection without publishing
+        run: python3 -B -m unittest discover -s .github/scripts
+
       - name: Verify Homebrew 7 publication support
         run: |
           version="$(brew --version | head -n 1)"
