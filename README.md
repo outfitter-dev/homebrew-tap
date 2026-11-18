@@ -36,7 +36,7 @@ Successful tap CI wakes [`brew pr-pull`](.github/workflows/publish.yml). A twice
 
 - Only same-tap Trails and Skillset stable release drafts qualify. The formula must advance the current version and match the URLs and SHA-256 digests of the latest published upstream release. An npm release alone does not qualify: the GitHub assets and tap draft must exist.
 - The draft must contain one release commit on current `main` and touch only the formula (Skillset may also update its README entry). If `main` moves, regenerate or rebase the draft and retest it.
-- Both tap workflows, every required check, and GitHub's merge/review rules must pass. A maintainer other than the PR author must approve the exact head SHA; changes requested or unresolved review threads block publication. A failed Intel job blocks it too.
+- Both tap workflows, every required check, and GitHub's merge/review rules must pass. The successful run must still have the bottle artifacts. A maintainer other than the PR author must approve the exact head SHA; changes requested or unresolved review threads block publication. A failed Intel job blocks it too.
 - The publisher checks eligibility before setting up Homebrew and again before invoking `brew pr-pull`. It does not automatically run merged-PR recovery.
 
 The current `blz` handoff does not create a draft and is not eligible for automation. Continue using the manual path for formula updates outside the automated handoffs.

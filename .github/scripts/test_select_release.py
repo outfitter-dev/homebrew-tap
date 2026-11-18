@@ -39,9 +39,11 @@ class EligibilityTests(unittest.TestCase):
         }
         self.commit = {"parents": [{"sha": BASE}], "files": [{"filename": PATH, "status": "modified"}]}
         self.run_info = {
-            "event": "pull_request", "head_sha": HEAD, "head_repository": {"full_name": REPO},
+            "id": 4321, "event": "pull_request", "head_sha": HEAD, "head_repository": {"full_name": REPO},
             "pull_requests": [{"number": NUMBER}], "status": "completed", "conclusion": "success",
         }
+        self.artifacts = [{"name": f"bottles_{runner}", "expired": False, "size_in_bytes": 100}
+                          for runner in ("macos-26", "macos-15-intel", "ubuntu-latest", "ubuntu-24.04-arm")]
         self.runs = {"tests.yml": [self.run_info], "formula-landing-policy.yml": [deepcopy(self.run_info)]}
         self.review = {
             "state": "APPROVED", "authorCanPushToRepository": True,
@@ -66,6 +68,8 @@ class EligibilityTests(unittest.TestCase):
         if "/actions/workflows/" in endpoint:
             workflow = re.search(r"/workflows/(.+?)/runs\?", endpoint)[1]
             return [{"workflow_runs": self.runs[workflow]}]
+        if endpoint == f"repos/{REPO}/actions/runs/4321/artifacts?per_page=100":
+            return [{"artifacts": self.artifacts}]
         if endpoint == f"repos/{REPO}/commits/{HEAD}?per_page=100":
             return self.commit
         if endpoint == "repos/outfitter-dev/trails/releases/latest":
@@ -114,6 +118,10 @@ class EligibilityTests(unittest.TestCase):
     def test_policy_workflow_must_also_succeed(self):
         self.runs["formula-landing-policy.yml"] = []
         self.assert_ineligible("Latest formula-landing-policy.yml run")
+
+    def test_expired_bottles_do_not_qualify(self):
+        self.artifacts[1]["expired"] = True
+        self.assert_ineligible("missing unexpired bottle artifacts")
 
     def test_review_requires_a_maintainer_and_the_exact_head(self):
         self.review["commit"]["oid"] = OLD_HEAD

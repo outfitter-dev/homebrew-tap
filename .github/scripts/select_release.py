@@ -20,6 +20,8 @@ PLATFORMS = {
     "trails": ("darwin-arm64", "darwin-x64", "linux-arm64", "linux-x64"),
     "skillset": ("darwin-arm64", "darwin-x64"),
 }
+MAC_BOTTLES = {"bottles_macos-26", "bottles_macos-15-intel"}
+LINUX_BOTTLES = {"bottles_ubuntu-latest", "bottles_ubuntu-24.04-arm"}
 
 PR_REVIEW_QUERY = """
 query($number: Int!) {
@@ -123,7 +125,7 @@ def verify_reviews(number, head, base, author):
             "Maintainer approval of the exact head is required, without outstanding changes requested")
 
 
-def verify_runs(number, head, branch):
+def verify_runs(number, head, branch, project):
     query = urlencode({"event": "pull_request", "head_sha": head, "branch": branch, "per_page": 100})
     for workflow in ("tests.yml", "formula-landing-policy.yml"):
         runs = pages(f"repos/{REPOSITORY}/actions/workflows/{workflow}/runs?{query}", "workflow_runs")
@@ -132,6 +134,11 @@ def verify_runs(number, head, branch):
                     and any(pr["number"] == number for pr in run["pull_requests"])), None)
         require(run and run["status"] == "completed" and run["conclusion"] == "success",
                 f"Latest {workflow} run for this PR head has not succeeded")
+        if workflow == "tests.yml":
+            artifacts = pages(f"repos/{REPOSITORY}/actions/runs/{run['id']}/artifacts?per_page=100", "artifacts")
+            available = {a["name"] for a in artifacts if not a["expired"] and a["size_in_bytes"] > 0}
+            expected = MAC_BOTTLES | LINUX_BOTTLES if project == "trails" else MAC_BOTTLES
+            require(expected <= available, "Test run is missing unexpired bottle artifacts")
 
 
 def eligible(pr, base, expected_head=None):
@@ -155,7 +162,7 @@ def eligible(pr, base, expected_head=None):
             and all(f["status"] == "modified" and not f.get("previous_filename") for f in files),
             "Only the expected release files may be modified")
 
-    verify_runs(number, head, branch)
+    verify_runs(number, head, branch, project)
     verify_reviews(number, head, base, pr["user"]["login"])
     verify_release(project, match, formula_at(path, base), formula_at(path, head),
                    api(f"repos/outfitter-dev/{project}/releases/latest"))
