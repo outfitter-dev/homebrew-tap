@@ -1,0 +1,26 @@
+class Skillset < Formula
+  desc "Source-first compiler for provider-native agent loadouts"
+  homepage "https://github.com/outfitter-dev/skillset"
+  url "https://github.com/outfitter-dev/skillset/releases/download/${tag}/skillset-${tag}-darwin-arm64.tar.gz"
+  sha256 "${sha_darwin_arm64}"
+  license "MIT"
+  depends_on :macos
+
+  on_macos do
+    on_intel do
+      url "https://github.com/outfitter-dev/skillset/releases/download/${tag}/skillset-${tag}-darwin-x64.tar.gz"
+      sha256 "${sha_darwin_x64}"
+    end
+  end
+
+  def install
+    bin.install "skillset"
+  end
+
+  test do
+    assert_equal version.to_s, shell_output("#{bin}/skillset --version").strip
+    output = shell_output("#{bin}/skillset lookup workspace --json")
+    assert_match "\"command\":\"lookup\"", output
+    assert_match "\"ok\":true", output
+  end
+end

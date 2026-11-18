@@ -1,0 +1,30 @@
+{
+  "trails": {
+    "formula_archive": {
+      "darwin-arm64": "supported",
+      "darwin-x64": "supported",
+      "linux-arm64": "supported",
+      "linux-x64": "supported"
+    },
+    "homebrew_bottle": {
+      "darwin-arm64": "supported",
+      "darwin-x64": "unsupported",
+      "linux-arm64": "supported",
+      "linux-x64": "supported"
+    }
+  },
+  "skillset": {
+    "formula_archive": {
+      "darwin-arm64": "supported",
+      "darwin-x64": "supported",
+      "linux-arm64": "unsupported",
+      "linux-x64": "unsupported"
+    },
+    "homebrew_bottle": {
+      "darwin-arm64": "supported",
+      "darwin-x64": "supported",
+      "linux-arm64": "unsupported",
+      "linux-x64": "unsupported"
+    }
+  }
+}

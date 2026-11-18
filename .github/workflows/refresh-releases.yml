@@ -1,0 +1,56 @@
+name: Refresh stale release drafts
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '11,41 * * * *'
+
+permissions: {}
+
+concurrency:
+  group: refresh-release-drafts
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    if: >-
+      github.repository == 'outfitter-dev/homebrew-tap' &&
+      github.ref == 'refs/heads/main' &&
+      vars.HOMEBREW_AUTO_PUBLISH == 'true' &&
+      vars.HOMEBREW_AUTO_REFRESH == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Check out trusted main
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Find an independently authorized stale release
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -B .github/scripts/refresh_release.py
+
+      - name: Create release draft refresher token
+        if: steps.plan.outputs.pull_request != ''
+        id: token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.HOMEBREW_REFRESH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.HOMEBREW_REFRESH_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: read
+
+      - name: Refresh the draft and trigger ordinary head CI
+        if: steps.plan.outputs.pull_request != ''
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          PULL_REQUEST: ${{ steps.plan.outputs.pull_request }}
+          EXPECTED_HEAD: ${{ steps.plan.outputs.head_sha }}
+        run: python3 -B .github/scripts/refresh_release.py --apply "$PULL_REQUEST" "$EXPECTED_HEAD"
