@@ -119,8 +119,9 @@ def verify_reviews(number, head, base, author):
         if review["authorCanPushToRepository"] and review["author"]
         and review["author"]["__typename"] == "User" and review["author"]["login"] != author
     ]
-    approvals = [review["commit"] for review in maintainers if review["state"] == "APPROVED"]
-    require(approvals and all(commit and commit["oid"] == head for commit in approvals)
+    exact_approval = any(r["state"] == "APPROVED" and r["commit"] and r["commit"]["oid"] == head
+                         for r in maintainers)
+    require(exact_approval
             and not any(r["state"] == "CHANGES_REQUESTED" for r in maintainers),
             "Maintainer approval of the exact head is required, without outstanding changes requested")
 

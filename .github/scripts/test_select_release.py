@@ -147,6 +147,13 @@ class EligibilityTests(unittest.TestCase):
         self.review_state["latestOpinionatedReviews"]["nodes"].append(blocker)
         self.assert_ineligible("outstanding changes requested")
 
+    def test_stale_approval_does_not_veto_a_current_approval(self):
+        stale = deepcopy(self.review)
+        stale["author"]["login"] = "another-maintainer"
+        stale["commit"]["oid"] = OLD_HEAD
+        self.review_state["latestOpinionatedReviews"]["nodes"].append(stale)
+        self.assertEqual(gate.eligible(self.pr, BASE), (NUMBER, HEAD))
+
     def test_preview_or_missing_assets_do_not_qualify(self):
         self.release["prerelease"] = True
         self.assert_ineligible("eligible stable release")
