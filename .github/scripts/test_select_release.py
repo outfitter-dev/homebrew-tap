@@ -23,15 +23,17 @@ DIGEST = "a" * 64
 ALLOWLIST = frozenset({"outfitter-dev/trails"})
 
 
-def formula(tag):
+def formula(tag, project="trails", platforms=PLATFORMS):
     return "".join(
-        f'    url "https://github.com/outfitter-dev/trails/releases/download/{tag}/trails-{tag}-{p}.tar.gz"\n'
-        f'    sha256 "{DIGEST}"\n' for p in PLATFORMS
+        f'    url "https://github.com/outfitter-dev/{project}/releases/download/{tag}/{project}-{tag}-{p}.tar.gz"\n'
+        f'    sha256 "{DIGEST}"\n' for p in platforms
     )
 
 
 class EligibilityTests(unittest.TestCase):
     def setUp(self):
+        self.project = "trails"
+        self.path = PATH
         self.pr = {
             "number": NUMBER, "state": "open", "draft": True, "user": {"login": "release-author"},
             "base": {"ref": "main", "sha": BASE},
@@ -77,9 +79,9 @@ class EligibilityTests(unittest.TestCase):
             return [{"artifacts": self.artifacts}]
         if endpoint == f"repos/{REPO}/commits/{HEAD}?per_page=100":
             return self.commit
-        if endpoint == "repos/outfitter-dev/trails/releases/latest":
+        if endpoint == f"repos/outfitter-dev/{self.project}/releases/latest":
             return self.release
-        if endpoint in (f"repos/{REPO}/contents/{PATH}?ref={BASE}", f"repos/{REPO}/contents/{PATH}?ref={HEAD}"):
+        if endpoint in (f"repos/{REPO}/contents/{self.path}?ref={BASE}", f"repos/{REPO}/contents/{self.path}?ref={HEAD}"):
             data = self.current if endpoint.endswith(BASE) else self.proposed
             return {"type": "file", "encoding": "base64", "content": base64.b64encode(data.encode())}
         self.fail(f"Unexpected GitHub API call: {args}")
@@ -89,8 +91,31 @@ class EligibilityTests(unittest.TestCase):
             gate.eligible(self.pr, BASE, ALLOWLIST, **kwargs)
 
     def test_verified_release_and_exact_approved_head(self):
-        self.assertEqual(gate.eligible(self.pr, BASE, ALLOWLIST), (NUMBER, HEAD))
-        self.assertEqual(gate.eligible(self.pr, BASE, ALLOWLIST, expected_head=HEAD), (NUMBER, HEAD))
+        allowlist = gate.load_allowlist(gate.ALLOWLIST_PATH)
+        self.assertEqual(gate.eligible(self.pr, BASE, allowlist), (NUMBER, HEAD))
+        self.assertEqual(gate.eligible(self.pr, BASE, allowlist, expected_head=HEAD), (NUMBER, HEAD))
+
+    def test_skillset_requires_a_verified_release_and_both_mac_bottles(self):
+        self.project = "skillset"
+        self.path = "Formula/skillset.rb"
+        self.pr["head"]["ref"] = "release/skillset"
+        self.commit["files"] = [{"filename": self.path, "status": "modified"}]
+        platforms = ("darwin-arm64", "darwin-x64")
+        tag = "v0.30.0"
+        self.current = formula("v0.29.0", self.project, platforms)
+        self.proposed = formula(tag, self.project, platforms)
+        self.release["tag_name"] = tag
+        self.release["assets"] = [
+            {"name": f"skillset-{tag}-{platform}.tar.gz", "state": "uploaded", "digest": f"sha256:{DIGEST}"}
+            for platform in platforms
+        ]
+        self.artifacts = self.artifacts[:2]
+        allowlist = gate.load_allowlist(gate.ALLOWLIST_PATH)
+        self.assertEqual(gate.eligible(self.pr, BASE, allowlist), (NUMBER, HEAD))
+        self.assertEqual(gate.eligible(self.pr, BASE, allowlist, expected_head=HEAD), (NUMBER, HEAD))
+        self.artifacts.pop()
+        with self.assertRaisesRegex(gate.NotEligible, "missing unexpired bottle artifacts"):
+            gate.eligible(self.pr, BASE, allowlist)
 
     def test_unlisted_upstream_is_denied_before_inspecting_a_release(self):
         self.pr["head"]["ref"] = "release/skillset"
@@ -180,8 +205,9 @@ class EligibilityTests(unittest.TestCase):
 
 
 class AllowlistTests(unittest.TestCase):
-    def test_checked_in_allowlist_is_valid(self):
-        gate.load_allowlist(gate.ALLOWLIST_PATH)
+    def test_checked_in_allowlist_contains_only_the_two_reviewed_upstreams(self):
+        self.assertEqual(gate.load_allowlist(gate.ALLOWLIST_PATH),
+                         frozenset({"outfitter-dev/skillset", "outfitter-dev/trails"}))
 
     def test_empty_allowlist_disables_all_upstreams(self):
         with TemporaryDirectory() as directory:
