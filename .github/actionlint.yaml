@@ -1,0 +1,3 @@
+config-variables:
+  - BREW_COMMIT_CLIENT_ID
+  - HOMEBREW_AUTO_PUBLISH
