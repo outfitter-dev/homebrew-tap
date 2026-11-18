@@ -6,10 +6,12 @@ import os
 import re
 import subprocess
 import sys
+from pathlib import Path
 from urllib.parse import urlencode
 
 
 REPOSITORY = "outfitter-dev/homebrew-tap"
+ALLOWLIST_PATH = Path(__file__).resolve().parents[1] / "autopublish.yaml"
 VERSION = r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
 SHA = r"[0-9a-f]{40}"
 BRANCHES = {
@@ -58,6 +60,21 @@ def api(*args):
 def pages(path, key=None):
     for page in api("--paginate", "--slurp", path):
         yield from page[key] if key else page
+
+
+def load_allowlist(path):
+    try:
+        entries = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise NotEligible("Cannot read a valid autopublish.yaml") from error
+    supported = {f"outfitter-dev/{project}" for project in BRANCHES}
+    require(
+        isinstance(entries, list)
+        and all(isinstance(entry, str) and entry in supported for entry in entries)
+        and len(set(entries)) == len(entries),
+        "autopublish.yaml must be a unique list of supported upstream repositories",
+    )
+    return frozenset(entries)
 
 
 def formula_at(path, sha):
@@ -142,7 +159,7 @@ def verify_runs(number, head, branch, project):
             require(expected <= available, "Test run is missing unexpired bottle artifacts")
 
 
-def eligible(pr, base, expected_head=None):
+def eligible(pr, base, allowlist, expected_head=None):
     number, head, branch = pr["number"], pr["head"]["sha"], pr["head"]["ref"]
     require(pr["state"] == "open" and pr["draft"]
             and pr["base"]["ref"] == "main" and pr["base"]["sha"] == base
@@ -152,6 +169,8 @@ def eligible(pr, base, expected_head=None):
     project, match = next(((name, m) for name, pattern in BRANCHES.items()
                            if (m := re.fullmatch(pattern, branch))), (None, None))
     require(project, "Not a supported stable release branch")
+    upstream = f"outfitter-dev/{project}"
+    require(upstream in allowlist, f"{upstream} is not allowed by autopublish.yaml")
     path = f"Formula/{project}.rb"
     permitted_paths = {path, "README.md"} if project == "skillset" else {path}
 
@@ -166,7 +185,7 @@ def eligible(pr, base, expected_head=None):
     verify_runs(number, head, branch, project)
     verify_reviews(number, head, base, pr["user"]["login"])
     verify_release(project, match, formula_at(path, base), formula_at(path, head),
-                   api(f"repos/outfitter-dev/{project}/releases/latest"))
+                   api(f"repos/{upstream}/releases/latest"))
     return number, head
 
 
@@ -182,6 +201,11 @@ def main():
         print(message)
         return
 
+    try:
+        allowlist = load_allowlist(ALLOWLIST_PATH)
+    except NotEligible as error:
+        sys.exit(str(error))
+
     if recheck:
         number, expected_head = sys.argv[1:]
         if not number.isascii() or not number.isdecimal() or not re.fullmatch(SHA, expected_head):
@@ -192,7 +216,7 @@ def main():
         candidates = pages(f"repos/{REPOSITORY}/pulls?state=open&base=main&direction=asc&per_page=100")
     for pr in candidates:
         try:
-            number, head = eligible(pr, base, expected_head)
+            number, head = eligible(pr, base, allowlist, expected_head)
         except NotEligible as error:
             print(f"PR #{pr['number']}: {error}")
             continue

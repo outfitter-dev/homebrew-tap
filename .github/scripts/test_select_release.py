@@ -1,6 +1,10 @@
 import base64
 from copy import deepcopy
+import os
+from pathlib import Path
 import re
+import sys
+from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
@@ -16,6 +20,7 @@ NUMBER = 44
 PATH = "Formula/trails.rb"
 PLATFORMS = ("darwin-arm64", "darwin-x64", "linux-arm64", "linux-x64")
 DIGEST = "a" * 64
+ALLOWLIST = frozenset({"outfitter-dev/trails"})
 
 
 def formula(tag):
@@ -58,7 +63,7 @@ class EligibilityTests(unittest.TestCase):
         self.proposed = formula("v0.3.0")
         self.current = formula("v0.2.3")
         api = patch.object(gate, "api", side_effect=self.github_api)
-        api.start()
+        self.api = api.start()
         self.addCleanup(api.stop)
 
     def github_api(self, *args):
@@ -81,11 +86,16 @@ class EligibilityTests(unittest.TestCase):
 
     def assert_ineligible(self, reason, **kwargs):
         with self.assertRaisesRegex(gate.NotEligible, reason):
-            gate.eligible(self.pr, BASE, **kwargs)
+            gate.eligible(self.pr, BASE, ALLOWLIST, **kwargs)
 
     def test_verified_release_and_exact_approved_head(self):
-        self.assertEqual(gate.eligible(self.pr, BASE), (NUMBER, HEAD))
-        self.assertEqual(gate.eligible(self.pr, BASE, expected_head=HEAD), (NUMBER, HEAD))
+        self.assertEqual(gate.eligible(self.pr, BASE, ALLOWLIST), (NUMBER, HEAD))
+        self.assertEqual(gate.eligible(self.pr, BASE, ALLOWLIST, expected_head=HEAD), (NUMBER, HEAD))
+
+    def test_unlisted_upstream_is_denied_before_inspecting_a_release(self):
+        self.pr["head"]["ref"] = "release/skillset"
+        self.assert_ineligible("outfitter-dev/skillset is not allowed")
+        self.api.assert_not_called()
 
     def test_recheck_rejects_a_replaced_head(self):
         self.assert_ineligible("selected head", expected_head=OLD_HEAD)
@@ -152,7 +162,7 @@ class EligibilityTests(unittest.TestCase):
         stale["author"]["login"] = "another-maintainer"
         stale["commit"]["oid"] = OLD_HEAD
         self.review_state["latestOpinionatedReviews"]["nodes"].append(stale)
-        self.assertEqual(gate.eligible(self.pr, BASE), (NUMBER, HEAD))
+        self.assertEqual(gate.eligible(self.pr, BASE, ALLOWLIST), (NUMBER, HEAD))
 
     def test_preview_or_missing_assets_do_not_qualify(self):
         self.release["prerelease"] = True
@@ -167,6 +177,37 @@ class EligibilityTests(unittest.TestCase):
         self.proposed = formula("v0.3.0")
         self.current = self.proposed
         self.assert_ineligible("must advance the current formula")
+
+
+class AllowlistTests(unittest.TestCase):
+    def test_checked_in_allowlist_is_valid(self):
+        gate.load_allowlist(gate.ALLOWLIST_PATH)
+
+    def test_empty_allowlist_disables_all_upstreams(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "autopublish.yaml"
+            path.write_text("[]", encoding="utf-8")
+            self.assertEqual(gate.load_allowlist(path), frozenset())
+
+    def test_missing_or_invalid_allowlist_cannot_select_or_recheck(self):
+        for config in (None, "[", "{}", '["outfitter-dev/trails", true]',
+                       '["outfitter-dev/trails", "outfitter-dev/unknown"]',
+                       '["outfitter-dev/trails", "outfitter-dev/trails"]'):
+            for args in (["selector"], ["selector", str(NUMBER), HEAD]):
+                with self.subTest(config=config, args=args), TemporaryDirectory() as directory:
+                    path = Path(directory) / "autopublish.yaml"
+                    output = Path(directory) / "output"
+                    if config is not None:
+                        path.write_text(config, encoding="utf-8")
+                    env = {"GITHUB_REPOSITORY": REPO, "GITHUB_REF": "refs/heads/main",
+                           "GITHUB_SHA": BASE, "GITHUB_OUTPUT": str(output)}
+                    with patch.dict(os.environ, env), patch.object(sys, "argv", args), \
+                         patch.object(gate, "ALLOWLIST_PATH", path), \
+                         patch.object(gate, "api", return_value={"object": {"sha": BASE}}) as api:
+                        with self.assertRaisesRegex(SystemExit, "autopublish.yaml"):
+                            gate.main()
+                    api.assert_called_once_with(f"repos/{REPO}/git/ref/heads/main")
+                    self.assertFalse(output.exists())
 
 
 if __name__ == "__main__":
