@@ -48,7 +48,7 @@ jobs:
       head_sha: ${{ steps.release.outputs.head_sha }}
     steps:
       - name: Check out the trusted tap revision
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -152,7 +152,7 @@ jobs:
       - name: Create publisher token
         if: steps.preflight.outputs.passed == 'true'
         id: publisher_token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           client-id: ${{ vars.BREW_COMMIT_CLIENT_ID }}
           private-key: ${{ secrets.HOMEBREW_PUBLISHER_APP_PRIVATE_KEY }}
@@ -162,14 +162,14 @@ jobs:
 
       - name: Set up Homebrew
         if: steps.preflight.outputs.passed == 'true'
-        uses: Homebrew/actions/setup-homebrew@1e34f2e2acaa766b7efacb8c26352e6abbb023f9 # 2026.09.13.1
+        uses: Homebrew/actions/setup-homebrew@ceec4e8419bb3c97ce96e9dda7738499ed5f869d # 2026.11.14.1
         with:
           token: ${{ steps.publisher_token.outputs.token }}
 
       - name: Set up git
         if: steps.preflight.outputs.passed == 'true'
         id: git_setup
-        uses: Homebrew/actions/git-user-config@1e34f2e2acaa766b7efacb8c26352e6abbb023f9 # 2026.09.13.1
+        uses: Homebrew/actions/git-user-config@ceec4e8419bb3c97ce96e9dda7738499ed5f869d # 2026.11.14.1
 
       - name: Recheck automatic eligibility after setup
         if: steps.preflight.outputs.passed == 'true' && github.event_name != 'workflow_dispatch'
@@ -246,6 +246,6 @@ jobs:
 
       - name: Push commits
         if: steps.preflight.outputs.passed == 'true'
-        uses: Homebrew/actions/git-try-push@1e34f2e2acaa766b7efacb8c26352e6abbb023f9 # 2026.09.13.1
+        uses: Homebrew/actions/git-try-push@ceec4e8419bb3c97ce96e9dda7738499ed5f869d # 2026.11.14.1
         with:
           branch: main
