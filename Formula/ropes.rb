@@ -16,6 +16,13 @@ class Ropes < Formula
   sha256 "30366f3d1cec02ca62d1dac8543980c253a67a2c31b17ae3a95ddf7d8427d704"
   license "MIT"
 
+  bottle do
+    root_url "https://github.com/outfitter-dev/homebrew-tap/releases/download/ropes-0.1.0-canary.4"
+    sha256                               arm64_tahoe:  "87be42d29b24313501a1d58239bf3487eb89a1eb862f76e9cb316baa38da65e3"
+    sha256 cellar: :any_skip_relocation, arm64_linux:  "bdbebb5429a5e4e38642734fae99f5af5afcdb897f0d4871c51a4dbb953e23b0"
+    sha256 cellar: :any_skip_relocation, x86_64_linux: "43140fbd3b377c67f8ccce0ac416d96d328e319f3e8f1cd2646241414e1daa34"
+  end
+
   on_macos do
     depends_on arch: :arm64
 
