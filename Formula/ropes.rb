@@ -1,4 +1,14 @@
 class Ropes < Formula
+  class LinuxX64Sse42Requirement < Requirement
+    fatal true
+
+    satisfy(build_env: false) { Hardware::CPU.sse4_2? }
+
+    def message
+      "The Ropes Linux x64 executable requires a CPU with SSE4.2 support."
+    end
+  end
+
   desc "Repository quality checks, tool configuration, and shared presets"
   homepage "https://github.com/outfitter-dev/ropes"
   url "https://github.com/outfitter-dev/ropes/releases/download/v0.1.0-canary.4/ropes-0.1.0-canary.4-darwin-arm64.tar.gz"
@@ -6,13 +16,17 @@ class Ropes < Formula
   sha256 "30366f3d1cec02ca62d1dac8543980c253a67a2c31b17ae3a95ddf7d8427d704"
   license "MIT"
 
-  depends_on "rumdl" => :test
-
   on_macos do
     depends_on arch: :arm64
+
+    on_arm do
+      depends_on "rumdl" => :test
+    end
   end
 
   on_linux do
+    depends_on "rumdl" => :test
+
     on_arm do
       url "https://github.com/outfitter-dev/ropes/releases/download/v0.1.0-canary.4/ropes-0.1.0-canary.4-linux-arm64.tar.gz"
       sha256 "3b41f7211e79bcfb190213bf81046685223bea911f7edd39086749f82ee348f1"
@@ -20,6 +34,7 @@ class Ropes < Formula
     on_intel do
       url "https://github.com/outfitter-dev/ropes/releases/download/v0.1.0-canary.4/ropes-0.1.0-canary.4-linux-x64.tar.gz"
       sha256 "4081564a29daadc0dbc13d65834a647554c433cda3cdcfc130a1e105e01ec406"
+      depends_on LinuxX64Sse42Requirement
     end
   end
 
